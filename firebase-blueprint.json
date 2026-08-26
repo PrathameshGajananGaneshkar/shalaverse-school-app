@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "Student master record for General Register",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "grNumber": { "type": "string" },
+        "admissionYear": { "type": "string" },
+        "admissionDate": { "type": "string" },
+        "admissionClass": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentNameLocal": { "type": "string" },
+        "fatherName": { "type": "string" },
+        "fatherNameLocal": { "type": "string" },
+        "motherName": { "type": "string" },
+        "motherNameLocal": { "type": "string" },
+        "birthDate": { "type": "string" },
+        "birthPlace": { "type": "string" },
+        "birthPlaceLocal": { "type": "string" },
+        "nationality": { "type": "string" },
+        "motherTongue": { "type": "string" },
+        "religion": { "type": "string" },
+        "religionLocal": { "type": "string" },
+        "caste": { "type": "string" },
+        "casteLocal": { "type": "string" },
+        "subCaste": { "type": "string" },
+        "subCasteLocal": { "type": "string" },
+        "uid": { "type": "string" },
+        "previousSchool": { "type": "string" },
+        "previousSchoolLocal": { "type": "string" },
+        "mobile": { "type": "string" },
+        "address": { "type": "string" },
+        "addressLocal": { "type": "string" },
+        "academicProgress": { "type": "string" },
+        "academicProgressLocal": { "type": "string" },
+        "behaviour": { "type": "string" },
+        "behaviourLocal": { "type": "string" },
+        "leavingReason": { "type": "string" },
+        "leavingReasonLocal": { "type": "string" },
+        "certificateDate": { "type": "string" },
+        "headmasterSignature": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["studentId", "grNumber", "studentName", "admissionClass"]
+    },
+    "SchoolSettings": {
+      "title": "SchoolSettings",
+      "description": "School profile and institutional configuration",
+      "type": "object",
+      "properties": {
+        "schoolName": { "type": "string" },
+        "schoolNameLocal": { "type": "string" },
+        "udiseNumber": { "type": "string" },
+        "boardAffiliation": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "website": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "headmasterName": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "tagline": { "type": "string" }
+      },
+      "required": ["schoolName", "udiseNumber"]
+    },
+    "DocumentLog": {
+      "title": "DocumentLog",
+      "description": "Issued document log for certificates (TC, Bonafide, Nirgam Utara)",
+      "type": "object",
+      "properties": {
+        "documentType": { "type": "string", "enum": ["TC", "BONAFIDE", "NIRGAM_UTARA"] },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "grNumber": { "type": "string" },
+        "studentClass": { "type": "string" },
+        "issuedDate": { "type": "string" },
+        "academicYear": { "type": "string" },
+        "issuedBy": { "type": "string" },
+        "purpose": { "type": "string" }
+      },
+      "required": ["documentType", "studentId", "studentName", "grNumber", "issuedDate"]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of student General Register records"
+    },
+    "/settings/{settingId}": {
+      "schema": "SchoolSettings",
+      "description": "School settings documents"
+    },
+    "/documents_log/{logId}": {
+      "schema": "DocumentLog",
+      "description": "Log of issued student documents and certificates"
+    }
+  }
+}
