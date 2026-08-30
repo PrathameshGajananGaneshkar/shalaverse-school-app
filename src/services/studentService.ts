@@ -7,7 +7,9 @@ import {
   updateDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
+  writeBatch,
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -44,19 +46,13 @@ export const studentService = {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(students));
         return students;
       } else {
-        // If Firestore is explicitly empty and was queried successfully
-        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed)) {
-              return parsed;
-            }
-          } catch {
-            // ignore
-          }
+        // If Firestore is reached and explicitly EMPTY (e.g. after Delete All)
+        const hasInitialized = localStorage.getItem('shalaverse_initialized_v2');
+        if (hasInitialized) {
+          // System was already used / cleared, so empty means empty!
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
+          return [];
         }
-        return [];
       }
     } catch (err) {
       console.warn('Firestore fetch failed, checking local cache:', err);
@@ -64,7 +60,7 @@ export const studentService = {
 
     // Fallback: Check local storage
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (cached) {
+    if (cached !== null) {
       try {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
@@ -75,7 +71,7 @@ export const studentService = {
       }
     }
 
-    // Only for the very first fresh initial open if nothing exists
+    // Only for the very first fresh initial open if nothing was ever initialized
     const hasInitialized = localStorage.getItem('shalaverse_initialized_v2');
     if (!hasInitialized) {
       localStorage.setItem('shalaverse_initialized_v2', 'true');
@@ -190,12 +186,47 @@ export const studentService = {
   },
 
   // Delete student
-  async deleteStudent(id: string): Promise<void> {
+  async deleteStudent(id: string, grNumber?: string): Promise<void> {
     try {
-      const docRef = doc(db, COLLECTION_NAME, id);
-      await deleteDoc(docRef);
+      if (id && !id.startsWith('sample-') && !id.startsWith('stu_')) {
+        const docRef = doc(db, COLLECTION_NAME, id);
+        await deleteDoc(docRef);
+      }
     } catch (err) {
-      console.warn('Firestore delete failed, deleting from local cache:', err);
+      console.warn('Firestore delete by direct ID failed, trying fallback search:', err);
+    }
+
+    // Try finding and deleting by grNumber or studentId in Firestore
+    try {
+      if (grNumber) {
+        const q = query(collection(db, COLLECTION_NAME), where('grNumber', '==', grNumber));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          try {
+            await deleteDoc(d.ref);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore delete by grNumber fallback:', err);
+    }
+
+    try {
+      if (id) {
+        const q = query(collection(db, COLLECTION_NAME), where('studentId', '==', id));
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          try {
+            await deleteDoc(d.ref);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore delete by studentId fallback:', err);
     }
 
     // Update local cache
@@ -203,11 +234,96 @@ export const studentService = {
     if (cached) {
       try {
         const list: Student[] = JSON.parse(cached);
-        const updated = list.filter(s => s.id !== id);
+        const updated = list.filter(s => 
+          s.id !== id && 
+          s.studentId !== id && 
+          (grNumber ? s.grNumber !== grNumber : true)
+        );
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
       } catch {
         // ignore
       }
+    }
+  },
+
+  // Completely Delete All Students (1-click wipe)
+  async deleteAllStudents(): Promise<{ deleted: number }> {
+    let deletedCount = 0;
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+      const docs = snapshot.docs;
+      deletedCount = docs.length;
+      
+      // Batch delete in chunks of 400
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = docs.slice(i, i + CHUNK_SIZE);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (err) {
+      console.warn('Firestore deleteAll error, wiping local cache:', err);
+    }
+
+    // Clear all local student caches and lock initialized flag so sample records never re-appear
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
+      localStorage.setItem('shalaverse_students', JSON.stringify([]));
+      localStorage.setItem('shalaverse_students_v1', JSON.stringify([]));
+      localStorage.setItem('shalaverse_initialized_v2', 'true');
+    } catch {
+      // ignore
+    }
+
+    return { deleted: deletedCount };
+  },
+
+  // Reset all student data to the original clean sample state
+  async resetToOriginalSchoolData(): Promise<{ restored: number }> {
+    try {
+      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+      
+      // Batch delete in chunks of 400
+      const docs = snapshot.docs;
+      const CHUNK_SIZE = 400;
+      for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = docs.slice(i, i + CHUNK_SIZE);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+
+      // Re-seed initial sample students to Firestore
+      const newBatch = writeBatch(db);
+      const initialStudents: Student[] = [];
+
+      INITIAL_SAMPLE_STUDENTS.forEach((sample, idx) => {
+        const docRef = doc(collection(db, COLLECTION_NAME));
+        const studentObj: Student = {
+          ...sample,
+          id: docRef.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        newBatch.set(docRef, {
+          ...studentObj,
+          serverCreatedAt: serverTimestamp()
+        });
+        initialStudents.push(studentObj);
+      });
+
+      await newBatch.commit();
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialStudents));
+      return { restored: initialStudents.length };
+    } catch (err) {
+      console.warn('Firestore reset error, using local fallback:', err);
+      const defaultSamples: Student[] = INITIAL_SAMPLE_STUDENTS.map((s, idx) => ({
+        ...s,
+        id: `sample-${idx + 1}`
+      }));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultSamples));
+      return { restored: defaultSamples.length };
     }
   },
 
@@ -250,57 +366,116 @@ export const studentService = {
     }
   },
 
-  // Restore & Import backup data
-  async importBackupData(students: (Omit<Student, 'id'> | Student)[]): Promise<{ added: number; failed: number }> {
+  // Restore & Import bulk students data (supports 100, 500, 1000, 10000+ students)
+  async importBackupData(
+    students: (Omit<Student, 'id'> | Student)[],
+    onProgress?: (completed: number, total: number) => void
+  ): Promise<{ added: number; failed: number }> {
     let added = 0;
     let failed = 0;
     const addedStudents: Student[] = [];
+    const total = students.length;
 
-    for (const student of students) {
+    // Normalize payloads
+    const preparedList = students.map((student, idx) => {
+      const { id, ...dataWithoutId } = student as any;
+      const grNumber = String(dataWithoutId.grNumber || '').trim() || `${1000 + idx + 1}`;
+      const studentName = String(dataWithoutId.studentName || '').trim() || `विद्यार्थी ${idx + 1}`;
+      
+      const payload: Omit<Student, 'id'> = {
+        grNumber,
+        studentId: dataWithoutId.studentId || `20252704020${(100 + idx + 1).toString().padStart(4, '0')}`,
+        studentName,
+        fatherName: dataWithoutId.fatherName || '',
+        motherName: dataWithoutId.motherName || '',
+        admissionClass: dataWithoutId.admissionClass || '1st',
+        admissionYear: dataWithoutId.admissionYear || '2025-2026',
+        admissionDate: dataWithoutId.admissionDate || '2025-06-16',
+        birthDate: dataWithoutId.birthDate || '2015-05-10',
+        birthPlace: dataWithoutId.birthPlace || '',
+        nationality: dataWithoutId.nationality || 'Indian (भारतीय)',
+        motherTongue: dataWithoutId.motherTongue || 'मराठी',
+        religion: dataWithoutId.religion || 'Hindu (हिंदू)',
+        caste: dataWithoutId.caste || '',
+        subCaste: dataWithoutId.subCaste || '',
+        uid: dataWithoutId.uid || '',
+        mobile: dataWithoutId.mobile || '',
+        address: dataWithoutId.address || '',
+        previousSchool: dataWithoutId.previousSchool || '',
+        academicProgress: dataWithoutId.academicProgress || 'Good',
+        behaviour: dataWithoutId.behaviour || 'Good',
+        leavingReason: dataWithoutId.leavingReason || '',
+        certificateDate: dataWithoutId.certificateDate || '',
+        createdAt: dataWithoutId.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const docId = id && id.length > 5 ? id : `stu_${Date.now()}_${idx}_${Math.random().toString(36).substring(2, 6)}`;
+      return { docId, payload };
+    });
+
+    // Chunk size: 350 items per batch to stay safely within Firestore 500 ops limit
+    const CHUNK_SIZE = 350;
+    const totalChunks = Math.ceil(preparedList.length / CHUNK_SIZE);
+
+    for (let c = 0; c < totalChunks; c++) {
+      const chunk = preparedList.slice(c * CHUNK_SIZE, (c + 1) * CHUNK_SIZE);
+      
       try {
-        const { id, ...dataWithoutId } = student as any;
-        const studentPayload = {
-          ...dataWithoutId,
-          studentName: dataWithoutId.studentName || 'विद्यार्थी',
-          grNumber: dataWithoutId.grNumber || `${Date.now().toString().slice(-4)}`,
-          admissionYear: dataWithoutId.admissionYear || '2026-2027',
-          admissionClass: dataWithoutId.admissionClass || '1st',
-          createdAt: dataWithoutId.createdAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        let newId = `stu_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-        try {
-          const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-            ...studentPayload,
+        const batch = writeBatch(db);
+        for (const item of chunk) {
+          const docRef = doc(db, COLLECTION_NAME, item.docId);
+          batch.set(docRef, {
+            ...item.payload,
             serverCreatedAt: serverTimestamp()
           });
-          newId = docRef.id;
-        } catch (dbErr) {
-          console.warn('Firestore addDoc fallback during import:', dbErr);
         }
+        await batch.commit();
 
-        addedStudents.push({
-          ...studentPayload,
-          id: newId
-        });
-        added++;
-      } catch (err) {
-        console.error('Failed to restore student record:', student, err);
-        failed++;
+        for (const item of chunk) {
+          addedStudents.push({
+            id: item.docId,
+            ...item.payload
+          });
+          added++;
+        }
+      } catch (batchErr) {
+        console.warn(`Batch ${c + 1} Firestore commit fallback, writing to local state:`, batchErr);
+        // Fallback to local memory saving for this chunk
+        for (const item of chunk) {
+          addedStudents.push({
+            id: item.docId,
+            ...item.payload
+          });
+          added++;
+        }
+      }
+
+      if (onProgress) {
+        onProgress(added, total);
       }
     }
 
-    // Merge with current cache
+    // Merge with current cache and save immediately
     const current = await this.getAllStudents();
     const grMap = new Map<string, Student>();
     
     // Add existing
     current.forEach(s => grMap.set(s.grNumber || s.id, s));
-    // Overwrite / Add imported
+    // Overwrite / Add newly imported
     addedStudents.forEach(s => grMap.set(s.grNumber || s.id, s));
 
     const finalMerged = Array.from(grMap.values());
+    // Sort merged list by GR number
+    finalMerged.sort((a, b) => {
+      const grA = parseInt(a.grNumber || '0', 10);
+      const grB = parseInt(b.grNumber || '0', 10);
+      if (!isNaN(grA) && !isNaN(grB) && grA !== grB) {
+        return grA - grB;
+      }
+      return (a.grNumber || '').localeCompare(b.grNumber || '');
+    });
+
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(finalMerged));
 
     return { added, failed };

@@ -52,7 +52,7 @@ export interface Student {
   leavingReason: string;
   leavingReasonLocal?: string;
   certificateDate: string;
-  headmasterSignature: string;
+  headmasterSignature?: string;
 
   // Timestamps
   createdAt?: string | number | Date;
