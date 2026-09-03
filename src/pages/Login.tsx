@@ -20,10 +20,16 @@ import { useLanguage } from '../context/LanguageContext';
 import { useSettings } from '../context/SettingsContext';
 
 export function Login() {
-  const { login, resetPassword, getCredentials } = useAuth();
+  const { login, resetPassword, getCredentials, isAuthenticated } = useAuth();
   const { language, setLanguage } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -47,10 +53,19 @@ export function Login() {
     // Pre-populate with registered master email if available for easy access
     getCredentials().then(creds => {
       if (creds && creds.adminEmail) {
-        setEmail(creds.adminEmail);
-        setForgotEmail(creds.adminEmail);
+        const targetEmail = creds.adminEmail === 'p.ganeshkar8788@gmail.com' 
+          ? 'shivajischool.chikhli@gmail.com' 
+          : creds.adminEmail;
+        setEmail(targetEmail);
+        setForgotEmail(targetEmail);
+      } else {
+        setEmail('shivajischool.chikhli@gmail.com');
+        setForgotEmail('shivajischool.chikhli@gmail.com');
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setEmail('shivajischool.chikhli@gmail.com');
+      setForgotEmail('shivajischool.chikhli@gmail.com');
+    });
   }, [getCredentials]);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -200,7 +215,7 @@ export function Login() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="p.ganeshkar8788@gmail.com"
+                  placeholder="shivajischool.chikhli@gmail.com"
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition outline-hidden"
                 />
               </div>
@@ -216,7 +231,7 @@ export function Login() {
                   type="button"
                   id="btn-open-forgot-modal"
                   onClick={() => {
-                    setForgotEmail(email || 'p.ganeshkar8788@gmail.com');
+                    setForgotEmail(email || 'shivajischool.chikhli@gmail.com');
                     setShowForgotModal(true);
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
@@ -284,7 +299,7 @@ export function Login() {
             <button
               type="button"
               onClick={() => {
-                setForgotEmail(email || 'p.ganeshkar8788@gmail.com');
+                setForgotEmail(email || 'shivajischool.chikhli@gmail.com');
                 setShowForgotModal(true);
               }}
               className="text-slate-400 hover:text-slate-200 underline text-[11px]"
@@ -349,7 +364,7 @@ export function Login() {
                     required
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="p.ganeshkar8788@gmail.com"
+                    placeholder="shivajischool.chikhli@gmail.com"
                     className="w-full pl-10 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:border-orange-500 outline-hidden"
                   />
                 </div>

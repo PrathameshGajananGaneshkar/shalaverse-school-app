@@ -1,6 +1,6 @@
 {
   "name": "ShalaVerse",
-  "description": "Shree Shivaji High School and Junior College (UDISE: 27040200119) - Student Admission & General Register Management System",
+  "description": "Shri Shivaji High School and Junior College, Chikhli (UDISE: 27070200119) - Student Admission & General Register Management System",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

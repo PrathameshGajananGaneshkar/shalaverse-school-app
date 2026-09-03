@@ -18,7 +18,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 
-// Use custom provisioned database ID or default with long polling for reliability in browser sandboxes
+// Use custom provisioned database ID with force long polling for reliable immediate connectivity in browser sandboxes/iframes
 const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
   ? firebaseConfig.firestoreDatabaseId
   : undefined;
@@ -26,7 +26,7 @@ const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestor
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
+    experimentalForceLongPolling: true,
   }, databaseId);
 } catch {
   try {

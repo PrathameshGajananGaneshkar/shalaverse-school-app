@@ -41,7 +41,7 @@ export function Settings() {
 
   // Security Credentials State
   const [authCreds, setAuthCreds] = useState<AuthCredentials>({
-    adminEmail: 'p.ganeshkar8788@gmail.com',
+    adminEmail: 'shivajischool.chikhli@gmail.com',
     passwordHash: 'Shala@123',
     securityPin: '8788',
     updatedAt: new Date().toISOString()
@@ -52,7 +52,12 @@ export function Settings() {
 
   useEffect(() => {
     getCredentials().then(creds => {
-      if (creds) setAuthCreds(creds);
+      if (creds) {
+        if (creds.adminEmail === 'p.ganeshkar8788@gmail.com') {
+          creds.adminEmail = 'shivajischool.chikhli@gmail.com';
+        }
+        setAuthCreds(creds);
+      }
     }).catch(() => {});
   }, [getCredentials]);
 
@@ -324,15 +329,59 @@ export function Settings() {
             {/* Board Affiliation */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Board Affiliation / Recognition
+                Management / Sanstha
               </label>
               <input
                 id="input-setting-affiliation"
                 type="text"
                 value={formData.boardAffiliation}
                 onChange={(e) => handleChange('boardAffiliation', e.target.value)}
-                placeholder="e.g. Maharashtra State Board (SSC/HSC)"
+                placeholder="e.g. Shri Shivaji Shikshan Sanstha, Amravati – Managed by"
                 className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm focus:bg-white focus:ring-blue-600"
+              />
+            </div>
+
+            {/* School Recognition No */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                School Recognition No. (शाळा मान्यता क्र.)
+              </label>
+              <input
+                id="input-setting-recognition"
+                type="text"
+                value={formData.recognitionNo || ''}
+                onChange={(e) => handleChange('recognitionNo', e.target.value)}
+                placeholder="e.g. Kr. Va Di. Bu. Ji. Pa. / Secondary School / Inspection 11150 Education Department Buldhana, Dt. 18/10/65"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm font-semibold focus:bg-white focus:ring-blue-600"
+              />
+            </div>
+
+            {/* Board & Affiliation */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Board Name (मंडळ)
+              </label>
+              <input
+                id="input-setting-board"
+                type="text"
+                value={formData.boardName || ''}
+                onChange={(e) => handleChange('boardName', e.target.value)}
+                placeholder="e.g. Amravati"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm focus:bg-white focus:ring-blue-600"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Affiliation No. (संलग्नता क्र.)
+              </label>
+              <input
+                id="input-setting-affiliation-no"
+                type="text"
+                value={formData.affiliationNo || ''}
+                onChange={(e) => handleChange('affiliationNo', e.target.value)}
+                placeholder="e.g. 04.03.016"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm font-mono focus:bg-white focus:ring-blue-600"
               />
             </div>
 
@@ -465,7 +514,7 @@ export function Settings() {
                   required
                   value={authCreds.adminEmail}
                   onChange={(e) => setAuthCreds({ ...authCreds, adminEmail: e.target.value })}
-                  placeholder="p.ganeshkar8788@gmail.com"
+                  placeholder="shivajischool.chikhli@gmail.com"
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600 outline-hidden"
                 />
               </div>

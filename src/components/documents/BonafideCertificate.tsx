@@ -1,17 +1,11 @@
 import { Student } from '../../types';
 import { useSettings } from '../../context/SettingsContext';
-import { formatDate } from '../../utils/dateUtils';
+import { formatDate, dateToWords } from '../../utils/dateUtils';
 import { 
-  getLocalizedStudentName, 
-  getLocalizedFatherName, 
-  getLocalizedMotherName, 
-  getLocalizedBirthPlace, 
-  getLocalizedReligion, 
   getLocalizedCaste, 
-  getLocalizedClass, 
-  getLocalizedBehaviour 
+  cleanEnglishText,
+  getLocalizedStudentName
 } from '../../utils/devanagariUtils';
-import { GraduationCap, Edit3 } from 'lucide-react';
 
 interface BonafideCertificateProps {
   student: Student;
@@ -20,6 +14,81 @@ interface BonafideCertificateProps {
   serialNumber?: string;
   lang?: 'en' | 'mr' | 'hi';
   onEdit?: () => void;
+}
+
+// Clean and format class for Bonafide
+function formatBonafideClass(rawClass: string, lang: 'en' | 'mr' | 'hi'): string {
+  if (!rawClass) return lang === 'mr' ? '६ वी' : lang === 'hi' ? '६ वीं' : '6th';
+  
+  // Clean double suffixes e.g. "6th th B" -> "6th B"
+  const clean = rawClass
+    .replace(/\b(\d+)(st|nd|rd|th)(\s*(st|nd|rd|th))+/gi, '$1$2')
+    .replace(/th\s*th/gi, 'th')
+    .trim();
+
+  if (lang === 'en') {
+    return clean;
+  }
+
+  const numMatch = clean.match(/(\d+)/);
+  if (numMatch) {
+    const num = parseInt(numMatch[1], 10);
+    const withoutSuffix = clean.replace(/\b\d+(st|nd|rd|th)\b/gi, '').trim();
+    const division = withoutSuffix.replace(/[^a-zA-Z\u0900-\u097F]/g, '').trim();
+
+    const mrOrdinal: Record<number, string> = {
+      1: '१ ली', 2: '२ री', 3: '३ री', 4: '४ थी', 5: '५ वी',
+      6: '६ वी', 7: '७ वी', 8: '८ वी', 9: '९ वी', 10: '१० वी',
+      11: '११ वी', 12: '१२ वी'
+    };
+    const hiOrdinal: Record<number, string> = {
+      1: '१ वीं', 2: '२ वीं', 3: '३ वीं', 4: '४ वीं', 5: '५ वीं',
+      6: '६ वीं', 7: '७ वीं', 8: '८ वीं', 9: '९ वीं', 10: '१० वीं',
+      11: '११ वीं', 12: '१२ वीं'
+    };
+
+    const base = lang === 'hi' 
+      ? (hiOrdinal[num] || `${num} वीं`) 
+      : (mrOrdinal[num] || `${num} वी`);
+
+    if (division) {
+      return `${base} (${division.toUpperCase()})`;
+    }
+    return base;
+  }
+
+  return clean;
+}
+
+// Format Caste for Bonafide
+function formatBonafideCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+  if (lang === 'en') {
+    const rawCaste = student.caste || student.casteLocal || 'SC';
+    const clean = cleanEnglishText(rawCaste).replace(/[()[\]{}]/g, '').trim().toUpperCase();
+    if (student.subCaste && student.subCaste !== '-' && !clean.includes(student.subCaste.toUpperCase())) {
+      return `${clean} - ${cleanEnglishText(student.subCaste).toUpperCase()}`;
+    }
+    return clean || 'SC';
+  }
+
+  if (lang === 'hi') {
+    const localized = getLocalizedCaste(student, 'hi');
+    const rawCaste = (student.caste || '').toUpperCase();
+    if (rawCaste.includes('SC') && !localized.includes('SC')) return `${localized} (SC)`;
+    if (rawCaste.includes('ST') && !localized.includes('ST')) return `${localized} (ST)`;
+    if (rawCaste.includes('OBC') && !localized.includes('OBC')) return `${localized} (OBC)`;
+    return localized;
+  }
+
+  // Marathi
+  const localized = getLocalizedCaste(student, 'mr');
+  const rawCaste = (student.caste || '').toUpperCase();
+  if (rawCaste.includes('SC') && !localized.includes('SC')) return `${localized} (SC)`;
+  if (rawCaste.includes('ST') && !localized.includes('ST')) return `${localized} (ST)`;
+  if (rawCaste.includes('OBC') && !localized.includes('OBC')) return `${localized} (OBC)`;
+  if (rawCaste.includes('VJNT') && !localized.includes('VJNT')) return `${localized} (VJNT)`;
+  if (rawCaste.includes('NT') && !localized.includes('NT')) return `${localized} (NT)`;
+  return localized;
 }
 
 export function BonafideCertificate({
@@ -32,290 +101,299 @@ export function BonafideCertificate({
 }: BonafideCertificateProps) {
   const { settings } = useSettings();
 
-  const defaultPurpose = lang === 'mr' 
+  const currentLang = lang;
+  const nameScript = currentLang === 'en' ? 'latin' : 'local';
+  const wordsScript = currentLang;
+
+  const defaultPurpose = currentLang === 'mr' 
     ? 'शैक्षणिक / शासकीय कामासाठी व शिष्यवृत्ती अर्जासाठी' 
-    : lang === 'hi' 
+    : currentLang === 'hi' 
     ? 'शैक्षणिक / शासकीय कार्य एवं छात्रवृत्ति आवेदन हेतु' 
     : 'Educational / Official Purposes & Scholarship Application';
 
   const finalPurpose = purpose || defaultPurpose;
 
-  const placeName = settings.address.includes('Chikhli') ? (
-    lang === 'mr' ? 'चिखली (जि. बुलढाणा)' : lang === 'hi' ? 'चिखली (जि. बुलढाणा)' : 'Chikhli (Dist. Buldhana)'
-  ) : 'Chikhli';
+  // Language Dictionary for the exact same Bonafide Proforma
+  const texts = {
+    en: {
+      topHeader: 'BONAFIDE CERTIFICATE',
+      schoolName: (settings.schoolName || 'SHRI SHIVAJI HIGH SCHOOL AND JUNIOR COLLEGE,').toUpperCase(),
+      address: (settings.address || 'CHIKHLI, DIST. BULDHANA - 443201').toUpperCase(),
+      udisePrefix: 'UDISE NO.',
+      centerTitle: 'BONAFIDE CERTIFICATE',
+      certifyPrefix: 'This is to certify that',
+      honorific: 'Shri/Kr.',
+      regularStudentPrefix: 'was the regular student of',
+      classSuffix: 'class of the school',
+      sessionPrefix: 'for the session',
+      sessionInfix: '',
+      classPrefix: '',
+      recordStatement: 'His/her original Marksheet and school leaving certificate is with school record.',
+      casteStatementPrefix: 'As per school (i.e. school leaving certificate) his/her caste is',
+      casteStatementSuffix: '',
+      dobStatementPrefix: 'as per school record his/her date of birth is (in figure)',
+      dobWordsPrefix: '(in words)',
+      grNoPrefix: 'Gen. Reg. No.',
+      placeLabel: 'Place:',
+      defaultPlace: 'Chikhli',
+      dateLabel: 'Date:',
+      refLabel: 'Ref / Outward No:',
+      classTeacher: 'Class Teacher',
+      principal: 'Principal',
+      footerSchool: settings.schoolName || 'Shri Shivaji High School & Jr. College',
+      footerAddress: 'Chikhli, Dist. Buldhana - 443201'
+    },
+    mr: {
+      topHeader: 'बोनाफाईड प्रमाणपत्र',
+      schoolName: (settings.schoolNameLocal || 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली'),
+      address: 'चिखली, जि. बुलढाणा - ४४३२०१',
+      udisePrefix: 'यु-डायस क्र.',
+      centerTitle: 'बोनाफाईड प्रमाणपत्र',
+      certifyPrefix: 'प्रमाणित करण्यात येते की,',
+      honorific: 'श्री / कु.',
+      regularStudentPrefix: 'हे या शाळेचे चालू शैक्षणिक सत्र',
+      sessionPrefix: '',
+      sessionInfix: 'मध्ये',
+      classPrefix: 'इयत्ता',
+      classSuffix: 'चे नियमित विद्यार्थी आहेत/होते.',
+      recordStatement: 'त्यांचे मूळ गुणपत्रक व शाळा सोडल्याचा दाखला शाळा दप्तरी जमा आहे.',
+      casteStatementPrefix: 'शाळा दप्तरी (शाळा सोडल्याच्या दाखल्यानुसार) त्यांची जात',
+      casteStatementSuffix: 'अशी नोंदलेली आहे.',
+      dobStatementPrefix: 'शालेय दप्तरी नोंदीनुसार त्यांची जन्म तारीख (अंकी)',
+      dobWordsPrefix: '(अक्षरी)',
+      grNoPrefix: 'जनरल रजिस्टर नं. (Gen. Reg. No.)',
+      placeLabel: 'ठिकाण:',
+      defaultPlace: 'चिखली',
+      dateLabel: 'दिनांक:',
+      refLabel: 'जावक क्र.:',
+      classTeacher: 'वर्ग शिक्षक',
+      principal: 'मुख्याध्यापक / प्राचार्य',
+      footerSchool: settings.schoolNameLocal || 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली',
+      footerAddress: 'चिखली, जि. बुलढाणा - ४४३२०१'
+    },
+    hi: {
+      topHeader: 'बोनाफाइड प्रमाण पत्र',
+      schoolName: (settings.schoolNameLocal || 'श्री शिवाजी हाईस्कूल एवं जूनियर कॉलेज, चिखली'),
+      address: 'चिखली, जिला बुलढाणा - ४४३२०१',
+      udisePrefix: 'यू-डायस क्र.',
+      centerTitle: 'बोनाफाइड प्रमाण पत्र',
+      certifyPrefix: 'प्रमाणित किया जाता है कि,',
+      honorific: 'श्री / कु.',
+      regularStudentPrefix: 'इस विद्यालय के चालू शैक्षणिक सत्र',
+      sessionPrefix: '',
+      sessionInfix: 'में',
+      classPrefix: 'कक्षा',
+      classSuffix: 'के नियमित विद्यार्थी हैं/थे।',
+      recordStatement: 'उनकी मूल अंकसूची एवं विद्यालय छोड़ने का प्रमाण पत्र विद्यालय अभिलेख में जमा है।',
+      casteStatementPrefix: 'विद्यालय अभिलेख (विद्यालय छोड़ने के प्रमाण पत्र) के अनुसार उनकी जाति',
+      casteStatementSuffix: 'दर्ज है।',
+      dobStatementPrefix: 'विद्यालय अभिलेख के अनुसार उनकी जन्म तिथि (अंकों में)',
+      dobWordsPrefix: '(शब्दों में)',
+      grNoPrefix: 'जनरल रजिस्टर नं. (Gen. Reg. No.)',
+      placeLabel: 'स्थान:',
+      defaultPlace: 'चिखली',
+      dateLabel: 'दिनांक:',
+      refLabel: 'जावक क्र.:',
+      classTeacher: 'वर्ग शिक्षक',
+      principal: 'प्रधानाचार्य / प्राचार्य',
+      footerSchool: settings.schoolName || 'श्री शिवाजी हाईस्कूल एवं जूनियर कॉलेज',
+      footerAddress: 'चिखली, जिला बुलढाणा - ४४३२०१'
+    }
+  };
+
+  const t = texts[currentLang];
+
+  // Academic year/session e.g. "2026 / 2027" or "2026-2027"
+  const rawAcademicYear = student.admissionYear || settings.academicYear || '2026-2027';
+  const sessionFormatted = rawAcademicYear.includes('-') 
+    ? rawAcademicYear.replace('-', ' / ') 
+    : rawAcademicYear.includes('/') 
+    ? rawAcademicYear 
+    : `${rawAcademicYear} / ${parseInt(rawAcademicYear, 10) + 1 || '2027'}`;
+
+  // Student name - 100% clean single full name
+  const localName = getLocalizedStudentName(student, 'mr');
+  const latinName = getLocalizedStudentName(student, 'en');
+  const displayStudentName = nameScript === 'latin' ? latinName : localName;
+
+  // Class
+  const displayClass = formatBonafideClass(student.admissionClass || '6th', currentLang);
+
+  // Caste / Category
+  const displayCaste = formatBonafideCaste(student, currentLang);
+
+  // Date of birth Figure & Words
+  const dobFigure = formatDate(student.birthDate);
+  const dobWords = dateToWords(student.birthDate, wordsScript);
+
+  // General Register Number
+  const displayGrNumber = student.grNumber || '37563';
+
+  // UDISE
+  const displayUdise = settings.udiseNumber || '27070200119';
+
+  // Issue Date
+  const issueDateFormatted = formatDate(issueDate);
 
   return (
-    <div className="a4-document-page bg-white text-slate-900 mx-auto w-full max-w-[210mm] min-h-[297mm] p-4 sm:p-6 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-2 print:m-0 print:shadow-none shadow-xl group">
-      {/* Quick Edit Overlay Button (Screen only, hidden in print) */}
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          title="बोनाफाईड माहिती बदला / Edit Bonafide Details"
-          className="absolute top-4 right-4 z-10 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-sans font-black rounded-lg shadow-md flex items-center gap-1.5 transition print:hidden cursor-pointer opacity-90 hover:opacity-100"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-          <span>{lang === 'mr' ? 'बदल करा (Edit)' : 'Edit'}</span>
-        </button>
-      )}
-
-      <div className="a4-inner-box border border-slate-800 p-3 sm:p-4 flex flex-col justify-between">
-        
-        {/* Header with School Crest */}
-        <div className="text-center border-b-2 border-slate-800 pb-2">
-          <div className="flex items-center justify-center gap-2.5 mb-1">
-            <div className="w-11 h-11 rounded-full border-2 border-slate-900 flex items-center justify-center text-slate-900 shrink-0">
-              <GraduationCap className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-[10px] sm:text-[11px] uppercase font-sans font-semibold tracking-wider text-slate-700">
-                {lang === 'mr' 
-                  ? 'महाराष्ट्र शासन मान्यताप्राप्त शिक्षण संस्था' 
-                  : lang === 'hi' 
-                  ? 'महाराष्ट्र शासन मान्यता प्राप्त शिक्षण संस्थान' 
-                  : (settings.boardAffiliation || 'Recognized by Department of School Education, Maharashtra')}
+    <div className="w-full flex flex-col items-center">
+      {/* 1. EXACT SCHOOL PROFORMA (Identical layout for English, Marathi & Hindi) */}
+      <div className="a4-document-page bg-white text-slate-950 mx-auto w-full max-w-[210mm] min-h-[297mm] p-4 sm:p-6 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-4 print:m-0 print:shadow-none shadow-xl flex flex-col justify-between">
+          <div className="a4-inner-box border-2 border-slate-900 p-6 sm:p-10 flex-1 flex flex-col justify-between">
+            
+            {/* Header Section */}
+            <div className="text-center">
+              <p className="font-serif font-black tracking-widest text-base sm:text-lg uppercase text-slate-900">
+                {t.topHeader}
               </p>
-              <h1 className="text-lg sm:text-2xl font-black tracking-tight text-slate-950 uppercase leading-tight">
-                {lang === 'en' ? settings.schoolName : (settings.schoolNameLocal || settings.schoolName)}
+              
+              <h1 className="font-serif font-black text-xl sm:text-2xl tracking-wide uppercase text-slate-950 mt-2 leading-tight">
+                {t.schoolName}
               </h1>
-              {lang !== 'en' && (
-                <p className="text-[11px] font-semibold text-slate-700 font-sans">
-                  {settings.schoolName}
+
+              <p className="font-sans font-bold text-xs sm:text-sm uppercase tracking-wider text-slate-800 mt-1">
+                {t.address}
+              </p>
+
+              <p className="font-mono font-black text-xs sm:text-sm uppercase tracking-wider text-slate-900 mt-1">
+                {t.udisePrefix} {displayUdise}
+              </p>
+
+              {/* Decorative Header Double Line */}
+              <div className="my-5 border-t-2 border-b-2 border-slate-900 py-1">
+                <h2 className="text-center font-serif font-black text-xl sm:text-2xl uppercase tracking-widest text-slate-950">
+                  {t.centerTitle}
+                </h2>
+              </div>
+            </div>
+
+            {/* Certificate Body Paragraphs */}
+            <div className="my-auto space-y-6 sm:space-y-8 text-base sm:text-[18px] leading-relaxed text-slate-950 font-serif">
+              
+              <p className="font-medium">
+                {t.certifyPrefix}
+              </p>
+
+              <p className="text-lg sm:text-xl font-bold tracking-wide">
+                {t.honorific}{' '}
+                <span className="font-black underline uppercase text-slate-950 decoration-slate-900 decoration-2 underline-offset-4 px-1">
+                  {displayStudentName}
+                </span>
+              </p>
+
+              {currentLang === 'en' ? (
+                <p className="leading-loose">
+                  {t.regularStudentPrefix}{' '}
+                  <span className="font-black underline uppercase px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                    {displayClass}
+                  </span>{' '}
+                  {t.classSuffix}
+                  <br />
+                  {t.sessionPrefix}{' '}
+                  <span className="font-black underline font-mono px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                    {sessionFormatted}
+                  </span>
+                  .
+                </p>
+              ) : (
+                <p className="leading-loose">
+                  {t.regularStudentPrefix}{' '}
+                  <span className="font-black underline font-mono px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                    {sessionFormatted}
+                  </span>{' '}
+                  {t.sessionInfix}
+                  <br />
+                  {t.classPrefix}{' '}
+                  <span className="font-black underline uppercase px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                    {displayClass}
+                  </span>{' '}
+                  {t.classSuffix}
                 </p>
               )}
-            </div>
-          </div>
 
-          <p className="text-[11px] text-slate-700 font-sans">
-            {settings.address} • Ph: {settings.phone} • Email: {settings.email}
-          </p>
-
-          <div className="flex items-center justify-between mt-1.5 pt-1 border-t border-slate-300 text-[11px] font-sans font-bold">
-            <span>UDISE No: <strong className="font-mono text-slate-950">{settings.udiseNumber}</strong></span>
-            <span>{lang === 'mr' ? 'जावक क्र: ' : lang === 'hi' ? 'जावक क्र: ' : 'Ref No: '}<strong className="font-mono text-slate-900">{serialNumber}</strong></span>
-            <span>{lang === 'mr' ? 'दिनांक: ' : lang === 'hi' ? 'दिनांक: ' : 'Date: '}<strong className="font-mono text-slate-900">{formatDate(issueDate)}</strong></span>
-          </div>
-
-          {/* Certificate Title Badge */}
-          <div className="mt-2">
-            <div className="inline-block border-2 border-slate-900 px-6 py-0.5 bg-slate-100 font-sans">
-              <h2 className="text-sm sm:text-base font-black tracking-widest uppercase text-slate-950">
-                {lang === 'mr' && 'बोनाफाईड प्रमाणपत्र ( BONAFIDE CERTIFICATE )'}
-                {lang === 'hi' && 'बोनाफाइड प्रमाण पत्र ( BONAFIDE CERTIFICATE )'}
-                {lang === 'en' && 'BONAFIDE CERTIFICATE'}
-              </h2>
-              <p className="text-[10px] sm:text-[11px] font-bold text-slate-800">
-                {lang === 'mr' && '( शाळेत नियमित शिकत असल्याचा अधिकृत दाखला )'}
-                {lang === 'hi' && '( विद्यालय में नियमित अध्ययनरत होने का प्रमाण पत्र )'}
-                {lang === 'en' && '( Certificate of Genuine Enrollment )'}
+              <p className="leading-relaxed">
+                {t.recordStatement}
               </p>
-            </div>
-          </div>
-        </div>
 
-        {/* Certificate Body */}
-        <div className="my-2 space-y-3 text-xs sm:text-sm leading-relaxed text-slate-900 px-1 sm:px-2">
-          
-          {/* Header Row with photo box */}
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex-1 space-y-2">
-              {lang === 'mr' && (
-                <>
-                  <p className="indent-6 text-justify">
-                    दाखला देण्यात येतो की, कुमार / कुमारी{' '}
-                    <strong className="font-black text-slate-950 text-sm sm:text-base underline uppercase px-1">
-                      {getLocalizedStudentName(student, 'mr')}
-                    </strong>
-                    , रा.{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedBirthPlace(student, 'mr')}
-                    </strong>
-                    , वडिलांचे नाव श्री{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedFatherName(student, 'mr')}
-                    </strong>{' '}
-                    व आईचे नाव सौ.{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedMotherName(student, 'mr')}
-                    </strong>
-                    , हे या विद्यालयाचे / कनिष्ठ महाविद्यालयाचे नियमित व प्रामाणिक (Bonafide) विद्यार्थी आहेत.
-                  </p>
+              <p className="leading-relaxed">
+                {t.casteStatementPrefix}{' '}
+                <span className="font-black underline uppercase px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                  {displayCaste}
+                </span>
+                {t.casteStatementSuffix ? ` ${t.casteStatementSuffix}` : '.'}
+              </p>
 
-                  <p className="indent-6 text-justify">
-                    सदर विद्यार्थी शैक्षणिक वर्ष{' '}
-                    <strong className="font-bold text-slate-950 border-b border-slate-900 px-1.5 font-mono">
-                      {student.admissionYear || settings.academicYear || '2026-2027'}
-                    </strong>{' '}
-                    मध्ये{' '}
-                    <strong className="font-black text-blue-900 text-sm border-b border-slate-900 px-1.5">
-                      इयत्ता {getLocalizedClass(student.admissionClass, 'mr')}
-                    </strong>{' '}
-                    मध्ये नियमित शिक्षण घेत आहेत.
-                  </p>
-                </>
-              )}
+              <p className="leading-loose">
+                {t.dobStatementPrefix}{' '}
+                <span className="font-black underline font-mono px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4 text-lg">
+                  {dobFigure}
+                </span>
+                <br />
+                {t.dobWordsPrefix}{' '}
+                <span className="font-black underline px-1 text-slate-950 decoration-slate-900 decoration-2 underline-offset-4">
+                  {dobWords}
+                </span>
+              </p>
 
-              {lang === 'hi' && (
-                <>
-                  <p className="indent-6 text-justify">
-                    प्रमाणित किया जाता है कि कुमार / कुमारी{' '}
-                    <strong className="font-black text-slate-950 text-sm sm:text-base underline uppercase px-1">
-                      {getLocalizedStudentName(student, 'hi')}
-                    </strong>
-                    , निवासी{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedBirthPlace(student, 'hi')}
-                    </strong>
-                    , सुपुत्र/सुपुत्री श्री{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedFatherName(student, 'hi')}
-                    </strong>{' '}
-                    एवं श्रीमती{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedMotherName(student, 'hi')}
-                    </strong>
-                    , इस विद्यालय / कनिष्ठ महाविद्यालय के नियमित एवं वास्तविक (Bonafide) छात्र/छात्रा हैं।
-                  </p>
+              <p className="text-lg sm:text-xl font-bold">
+                {t.grNoPrefix}{' '}
+                <span className="font-black underline font-mono text-slate-950 decoration-slate-900 decoration-2 underline-offset-4 px-1">
+                  {displayGrNumber}
+                </span>
+              </p>
 
-                  <p className="indent-6 text-justify">
-                    वह शैक्षणिक सत्र{' '}
-                    <strong className="font-bold text-slate-950 border-b border-slate-900 px-1.5 font-mono">
-                      {student.admissionYear || settings.academicYear || '2026-2027'}
-                    </strong>{' '}
-                    में{' '}
-                    <strong className="font-black text-blue-900 text-sm border-b border-slate-900 px-1.5">
-                      कक्षा {getLocalizedClass(student.admissionClass, 'hi')}
-                    </strong>{' '}
-                    में नियमित अध्ययनरत हैं।
-                  </p>
-                </>
-              )}
-
-              {lang === 'en' && (
-                <>
-                  <p className="indent-6 text-justify">
-                    This is to certify that Kumar / Kumari{' '}
-                    <strong className="font-black text-slate-950 text-sm sm:text-base underline uppercase px-1">
-                      {getLocalizedStudentName(student, 'en')}
-                    </strong>
-                    , Son / Daughter of Shri{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedFatherName(student, 'en')}
-                    </strong>{' '}
-                    and Smt.{' '}
-                    <strong className="font-bold text-slate-950 underline px-1">
-                      {getLocalizedMotherName(student, 'en')}
-                    </strong>
-                    , is a regular and <strong>bonafide student</strong> of this institution.
-                  </p>
-
-                  <p className="indent-6 text-justify">
-                    He / She is studying in{' '}
-                    <strong className="font-black text-blue-900 text-sm border-b border-slate-900 px-1.5">
-                      Class {student.admissionClass}
-                    </strong>{' '}
-                    for the Academic Year{' '}
-                    <strong className="font-bold text-slate-950 border-b border-slate-900 px-1.5 font-mono">
-                      {student.admissionYear || settings.academicYear || '2026-2027'}
-                    </strong>
-                    .
-                  </p>
-                </>
-              )}
             </div>
 
-            {/* Compact Photo Frame */}
-            <div className="w-24 h-28 border-2 border-dashed border-slate-400 flex flex-col items-center justify-center text-[10px] text-slate-400 font-sans p-1 text-center bg-slate-50/50 shrink-0">
-              <span>{lang === 'mr' ? 'विद्यार्थी फोटो' : lang === 'hi' ? 'छात्र फोटो' : 'Passport Photo'}</span>
-              <span className="text-[8px] mt-1 text-slate-400">({lang === 'mr' ? 'मुख्याध्यापक साक्षांकित' : lang === 'hi' ? 'प्रधानाचार्य सत्यापित' : 'Attested by Principal'})</span>
-            </div>
-          </div>
-
-          {/* Student Key Registered Details Table */}
-          <div className="my-2 bg-slate-50 p-2.5 sm:p-3 border border-slate-300 font-sans text-[11px] sm:text-xs rounded">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'विद्यार्थी आयडी: ' : lang === 'hi' ? 'छात्र आईडी: ' : 'Student ID: '}</span>
-                <strong className="font-mono font-bold text-blue-900">{student.studentId || (student.grNumber ? `STU-${student.admissionYear?.slice(0, 4) || '2026'}-${student.grNumber}` : '-')}</strong>
-              </div>
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'जनरल रजिस्टर (G.R.) नं: ' : lang === 'hi' ? 'जी.आर. नंबर: ' : 'General Register (G.R.) No: '}</span>
-                <strong className="font-mono font-bold text-slate-950">{student.grNumber}</strong>
-              </div>
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'आधार (UID) नंबर: ' : lang === 'hi' ? 'आधार (UID) नंबर: ' : 'Aadhaar (UID) Number: '}</span>
-                <strong className="font-mono font-bold text-slate-950">{student.uid || '-'}</strong>
-              </div>
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'जन्मदिनांक (GR नुसार): ' : lang === 'hi' ? 'जन्म तिथि: ' : 'Date of Birth (as per GR): '}</span>
-                <strong className="font-bold text-slate-950 font-mono">{formatDate(student.birthDate)}</strong>
-              </div>
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'जन्मस्थळ: ' : lang === 'hi' ? 'जन्म स्थान: ' : 'Place of Birth: '}</span>
-                <strong className="font-bold text-slate-950">{getLocalizedBirthPlace(student, lang)}</strong>
-              </div>
-              <div>
-                <span className="text-slate-600">{lang === 'mr' ? 'धर्म व जात: ' : lang === 'hi' ? 'धर्म एवं जाति: ' : 'Caste / Category: '}</span>
-                <strong className="font-bold text-slate-950">{getLocalizedCaste(student, lang)} ({getLocalizedReligion(student, lang)})</strong>
-              </div>
-            </div>
-          </div>
-
-          <p className="indent-6 text-justify">
-            {lang === 'mr' && (
-              <>
-                शाळेतील अधिकृत जनरल रजिस्टर (GR) नोंदीनुसार त्यांचे वर्तन व स्वभाव <strong className="font-bold text-slate-950">{getLocalizedBehaviour(student.behaviour, 'mr')}</strong> आहे. सदर प्रमाणपत्र हे विद्यार्थी / पालकांच्या विनंतीवरून <strong className="font-bold text-slate-950 underline">{finalPurpose}</strong> कामी देण्यात येत आहे.
-              </>
-            )}
-            {lang === 'hi' && (
-              <>
-                विद्यालयीन सामान्य रजिस्टर (GR) के अनुसार इनका आचरण एवं स्वभाव <strong className="font-bold text-slate-950">{getLocalizedBehaviour(student.behaviour, 'hi')}</strong> है। यह प्रमाण पत्र छात्र/अभिभावक के अनुरोध पर <strong className="font-bold text-slate-950 underline">{finalPurpose}</strong> हेतु जारी किया जा रहा है।
-              </>
-            )}
-            {lang === 'en' && (
-              <>
-                As per the school general records, his/her character and conduct during the stay in the school have been found to be <strong className="font-bold text-slate-950">{student.behaviour || 'Very Good'}</strong>. This certificate is issued upon the request of the student/parent for the purpose of <strong className="font-bold text-slate-950 underline">{finalPurpose}</strong>.
-              </>
-            )}
-          </p>
-        </div>
-
-        {/* Signatures & Seal Footer */}
-        <div className="mt-2 pt-2 border-t-2 border-slate-800 font-sans">
-          <div className="grid grid-cols-3 text-center gap-2 text-[11px] font-bold text-slate-900">
-            <div>
-              <div className="h-9 sm:h-11 print:h-8 flex items-end justify-center">
-                <span className="border-b border-dotted border-slate-600 w-28 inline-block"></span>
-              </div>
-              <p className="mt-0.5">{lang === 'mr' ? 'तयार करणार (लिपिक)' : lang === 'hi' ? 'तैयारकर्ता (लिपिक)' : 'Prepared by (Clerk)'}</p>
-            </div>
-
-            <div>
-              <div className="h-9 sm:h-11 print:h-8 flex items-center justify-center">
-                <div className="w-16 h-8 border border-dashed border-slate-400 rounded flex items-center justify-center text-[9px] text-slate-400">
-                  {lang === 'mr' ? 'शाळेचा शिक्का' : lang === 'hi' ? 'विद्यालय मोहर' : 'School Seal'}
+            {/* Footer Information & Signatures */}
+            <div className="pt-6 sm:pt-8 font-serif">
+              
+              <div className="flex justify-between items-start text-sm sm:text-base font-semibold text-slate-950 mb-6">
+                <div className="space-y-1">
+                  <p>
+                    {t.placeLabel} <span className="font-bold">{t.defaultPlace}</span>
+                  </p>
+                  <p>
+                    {t.dateLabel} <span className="font-bold font-mono">{issueDateFormatted}</span>
+                  </p>
+                  {serialNumber && (
+                    <p className="text-xs text-slate-600 font-mono">
+                      {t.refLabel} {serialNumber}
+                    </p>
+                  )}
                 </div>
               </div>
-              <p className="mt-0.5">{lang === 'mr' ? 'तपासणार (वरिष्ठ लिपिक)' : lang === 'hi' ? 'सत्यापनकर्ता' : 'Verified by Office Supdt.'}</p>
-            </div>
 
-            <div>
-              <div className="h-9 sm:h-11 print:h-8 flex items-end justify-center">
-                <span className="border-b border-dotted border-slate-600 w-32 inline-block"></span>
+              {/* Signature Line */}
+              <div className="flex justify-between items-end pt-12 sm:pt-16 pb-2 px-2 sm:px-6">
+                <div className="text-center">
+                  <div className="h-10 flex items-end justify-center">
+                    <span className="w-36 border-b border-dotted border-slate-800 inline-block"></span>
+                  </div>
+                  <p className="mt-2 font-black text-base sm:text-lg text-slate-950 uppercase font-sans tracking-wide">
+                    {t.classTeacher}
+                  </p>
+                </div>
+
+                <div className="text-center">
+                  <div className="h-10 flex items-end justify-center">
+                    <span className="w-48 border-b border-dotted border-slate-800 inline-block"></span>
+                  </div>
+                  <p className="mt-2 font-black text-base sm:text-lg text-slate-950 uppercase font-sans tracking-wide">
+                    {t.principal}
+                  </p>
+                  <p className="text-xs text-slate-700 font-bold uppercase mt-0.5 font-sans">
+                    {t.footerSchool}
+                  </p>
+                  <p className="text-[11px] text-slate-600 font-medium font-sans">
+                    {t.footerAddress}
+                  </p>
+                </div>
               </div>
-              <p className="mt-0.5 text-slate-950">{lang === 'mr' ? 'मुख्याध्यापक / प्राचार्य' : lang === 'hi' ? 'प्रधानाचार्य / प्राचार्य' : 'Headmaster / Principal'}</p>
-              <p className="text-[9px] font-normal text-slate-600 leading-none">{settings.headmasterName}</p>
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 pt-1 border-t border-slate-200">
-            <span>{lang === 'mr' ? 'ठिकाण: ' : lang === 'hi' ? 'स्थान: ' : 'Place: '}<strong>{placeName}</strong></span>
-            <span>{lang === 'mr' ? 'दिनांक: ' : lang === 'hi' ? 'दिनांक: ' : 'Date: '}<strong>{formatDate(issueDate)}</strong></span>
-            <span>ShalaVerse Verified Document</span>
+            </div>
+
           </div>
         </div>
-
-      </div>
     </div>
   );
 }

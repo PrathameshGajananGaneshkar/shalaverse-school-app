@@ -14,6 +14,7 @@ import {
 import * as XLSX from 'xlsx';
 import { Student, AdmissionClass } from '../../types';
 import { studentService } from '../../services/studentService';
+import { deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
 
 interface ExcelImportModalProps {
   isOpen: boolean;
@@ -204,9 +205,9 @@ export function ExcelImportModal({
       students.push({
         grNumber: grVal || `GR-${1000 + students.length + 1}`,
         studentId: `20252704020${(100 + students.length + 1).toString().padStart(4, '0')}`,
-        studentName: nameVal || `विद्यार्थी ${students.length + 1}`,
-        fatherName: getVal('fatherName'),
-        motherName: getVal('motherName'),
+        studentName: deduplicateRepeatedPhrase(nameVal || `विद्यार्थी ${students.length + 1}`),
+        fatherName: deduplicateRepeatedPhrase(getVal('fatherName')),
+        motherName: deduplicateRepeatedPhrase(getVal('motherName')),
         admissionClass: matchedClass,
         admissionYear: getVal('admissionYear') || '2025-2026',
         admissionDate: getVal('admissionDate') || '2025-06-16',

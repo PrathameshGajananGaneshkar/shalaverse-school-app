@@ -64,6 +64,9 @@ export interface SchoolSettings {
   schoolNameLocal?: string; // Regional language title
   udiseNumber: string;
   boardAffiliation: string;
+  recognitionNo?: string;
+  affiliationNo?: string;
+  boardName?: string;
   address: string;
   phone: string;
   email: string;

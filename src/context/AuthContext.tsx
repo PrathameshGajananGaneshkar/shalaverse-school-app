@@ -4,7 +4,9 @@ import {
   onAuthStateChanged, 
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut
+  signOut,
+  setPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { UserProfile } from '../types';
@@ -26,13 +28,20 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_AUTH_KEY = 'shalaverse_auth_user';
+const SESSION_STORAGE_AUTH_KEY = 'shalaverse_auth_session';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    // Clear any legacy persistent localStorage key so old sessions don't keep user logged in across restarts
     try {
-      const saved = localStorage.getItem(LOCAL_STORAGE_AUTH_KEY);
+      localStorage.removeItem('shalaverse_auth_user');
+    } catch {
+      // ignore
+    }
+
+    try {
+      const saved = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -44,28 +53,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Initial fetch of credentials to make sure cache is updated
     authCredentialsService.getCredentials().catch(() => {});
 
+    // Configure session-only persistence in Firebase Auth
+    setPersistence(auth, browserSessionPersistence).catch(() => {});
+
+    // If there is NO active session in this browser tab/window, force log out immediately
+    const activeSession = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
+    if (!activeSession) {
+      signOut(auth).catch(() => {});
+      setUser(null);
+      setUserProfile(null);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        const profile: UserProfile = {
-          uid: currentUser.uid,
-          email: currentUser.email || 'school@shalaverse.edu',
-          displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'School Office Staff',
-          role: 'admin'
-        };
-        setUserProfile(profile);
-        localStorage.setItem(LOCAL_STORAGE_AUTH_KEY, JSON.stringify(profile));
-      } else {
-        const saved = localStorage.getItem(LOCAL_STORAGE_AUTH_KEY);
-        if (saved) {
-          try {
-            setUserProfile(JSON.parse(saved));
-          } catch {
-            setUserProfile(null);
-          }
-        } else {
+      const currentSession = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
+      if (currentSession) {
+        try {
+          setUserProfile(JSON.parse(currentSession));
+        } catch {
           setUserProfile(null);
         }
+      } else {
+        setUserProfile(null);
       }
       setLoading(false);
     });
@@ -90,7 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(verifyResult.message || 'चुकीचा ईमेल किंवा पासवर्ड! वेबसाईट उघडण्यासाठी योग्य पासवर्ड आवश्यक आहे.');
       }
 
-      // 2. Attempt Firebase Auth sign-in or auto-provision
+      // 2. Set session-only persistence before signing in
+      try {
+        await setPersistence(auth, browserSessionPersistence);
+      } catch {
+        // ignore
+      }
+
+      // 3. Attempt Firebase Auth sign-in or auto-provision
       try {
         const cred = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPass);
         setUser(cred.user);
@@ -109,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // 3. Set authenticated session
+      // 4. Set authenticated session in sessionStorage (clears upon closing browser/tab)
       const profile: UserProfile = {
         uid: user?.uid || 'school-admin-' + Date.now(),
         email: trimmedEmail,
@@ -117,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: 'admin'
       };
       setUserProfile(profile);
-      localStorage.setItem(LOCAL_STORAGE_AUTH_KEY, JSON.stringify(profile));
+      sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
     } finally {
       setLoading(false);
     }
@@ -126,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signupWithEmail = async (email: string, pass: string) => {
     setLoading(true);
     try {
+      await setPersistence(auth, browserSessionPersistence).catch(() => {});
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass.trim());
       setUser(cred.user);
       const profile: UserProfile = {
@@ -135,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: 'admin'
       };
       setUserProfile(profile);
-      localStorage.setItem(LOCAL_STORAGE_AUTH_KEY, JSON.stringify(profile));
+      sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
     } finally {
       setLoading(false);
     }
@@ -147,7 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signOut(auth).catch(() => {});
       setUser(null);
       setUserProfile(null);
-      localStorage.removeItem(LOCAL_STORAGE_AUTH_KEY);
+      sessionStorage.removeItem(SESSION_STORAGE_AUTH_KEY);
+      try {
+        localStorage.removeItem('shalaverse_auth_user');
+      } catch {
+        // ignore
+      }
     } finally {
       setLoading(false);
     }

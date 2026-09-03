@@ -16,7 +16,7 @@ const FIRESTORE_DOC_PATH = 'settings/auth_credentials';
 
 // Default initial master credentials
 const DEFAULT_CREDENTIALS: AuthCredentials = {
-  adminEmail: 'p.ganeshkar8788@gmail.com',
+  adminEmail: 'shivajischool.chikhli@gmail.com',
   passwordHash: 'Shala@123',
   securityPin: '8788',
   recoveryQuestion: 'तुमचे आवडते शहर कोणते?',
@@ -32,6 +32,11 @@ export const authCredentialsService = {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data() as AuthCredentials;
+        if (data.adminEmail === 'p.ganeshkar8788@gmail.com') {
+          data.adminEmail = 'shivajischool.chikhli@gmail.com';
+          // asynchronously update in cloud
+          setDoc(docRef, { adminEmail: 'shivajischool.chikhli@gmail.com' }, { merge: true }).catch(() => {});
+        }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         return data;
       }
@@ -42,7 +47,12 @@ export const authCredentialsService = {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed.adminEmail === 'p.ganeshkar8788@gmail.com') {
+          parsed.adminEmail = 'shivajischool.chikhli@gmail.com';
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
       }
     } catch (e) {
       // ignore
@@ -80,7 +90,7 @@ export const authCredentialsService = {
 
     // Allow default fallback if matching default
     if (
-      (cleanEmail === 'admin@shalaverse.edu' || cleanEmail === 'p.ganeshkar8788@gmail.com') && 
+      (cleanEmail === 'admin@shalaverse.edu' || cleanEmail === 'shivajischool.chikhli@gmail.com') && 
       cleanPass === expectedPass
     ) {
       return { success: true };
@@ -104,7 +114,7 @@ export const authCredentialsService = {
     const expectedEmail = creds.adminEmail.trim().toLowerCase();
 
     // Check if email matches registered email (or default)
-    if (cleanEmail !== expectedEmail && cleanEmail !== 'p.ganeshkar8788@gmail.com' && cleanEmail !== 'admin@shalaverse.edu') {
+    if (cleanEmail !== expectedEmail && cleanEmail !== 'shivajischool.chikhli@gmail.com' && cleanEmail !== 'admin@shalaverse.edu') {
       return {
         success: false,
         message: 'हा ईमेल आयडी शाळेच्या सिस्टीममध्ये नोंदणीकृत नाही. कृपया नोंदणीकृत ईमेल टाका.'

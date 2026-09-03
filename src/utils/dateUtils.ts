@@ -98,12 +98,43 @@ function hiYearToWords(year: number): string {
 export function dateToWords(dateString?: string | null, lang: 'en' | 'mr' | 'hi' = 'en'): string {
   if (!dateString) return '-';
   try {
-    const parts = dateString.split('-');
-    if (parts.length === 3) {
-      const day = parseInt(parts[2], 10);
-      const monthIdx = parseInt(parts[1], 10) - 1;
-      const year = parseInt(parts[0], 10);
+    let day = 0;
+    let monthIdx = 0;
+    let year = 0;
 
+    if (dateString.includes('-')) {
+      const parts = dateString.split('-');
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          // YYYY-MM-DD
+          year = parseInt(parts[0], 10);
+          monthIdx = parseInt(parts[1], 10) - 1;
+          day = parseInt(parts[2], 10);
+        } else {
+          // DD-MM-YYYY
+          day = parseInt(parts[0], 10);
+          monthIdx = parseInt(parts[1], 10) - 1;
+          year = parseInt(parts[2], 10);
+        }
+      }
+    } else if (dateString.includes('/')) {
+      const parts = dateString.split('/');
+      if (parts.length === 3) {
+        if (parts[2].length === 4) {
+          // DD/MM/YYYY
+          day = parseInt(parts[0], 10);
+          monthIdx = parseInt(parts[1], 10) - 1;
+          year = parseInt(parts[2], 10);
+        } else {
+          // YYYY/MM/DD
+          year = parseInt(parts[0], 10);
+          monthIdx = parseInt(parts[1], 10) - 1;
+          day = parseInt(parts[2], 10);
+        }
+      }
+    }
+
+    if (day > 0 && monthIdx >= 0 && year > 0) {
       if (lang === 'mr') {
         const dStr = MR_DAYS[day] || String(day);
         const mStr = MR_MONTHS[monthIdx] || '';

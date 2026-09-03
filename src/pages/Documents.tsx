@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   FileText, 
   GraduationCap, 
@@ -24,6 +24,7 @@ import { NirgamUtara } from '../components/documents/NirgamUtara';
 import { CertificateEditModal, CustomDocFields } from '../components/documents/CertificateEditModal';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { formatDate } from '../utils/dateUtils';
+import { printCertificateElement } from '../utils/exportUtils';
 
 type DocTab = 'tc' | 'bonafide' | 'nirgam-utara';
 type DocLang = 'mr' | 'en' | 'hi';
@@ -32,10 +33,24 @@ export function Documents() {
   const { t, language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Active Tab: 'tc', 'bonafide', 'nirgam-utara'
-  const currentTab = (searchParams.get('type') as DocTab) || 'tc';
+  // Active Tab: Determine from route pathname (/documents/bonafide, /documents/tc, /documents/nirgam-utara) or query param (?type=bonafide)
+  const getActiveTab = (): DocTab => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('bonafide')) return 'bonafide';
+    if (path.includes('nirgam')) return 'nirgam-utara';
+    if (path.includes('tc')) return 'tc';
+
+    const typeParam = searchParams.get('type') as DocTab;
+    if (typeParam === 'bonafide' || typeParam === 'nirgam-utara' || typeParam === 'tc') {
+      return typeParam;
+    }
+    return 'tc';
+  };
+
+  const currentTab = getActiveTab();
   const paramStudentId = searchParams.get('studentId') || '';
 
   // Document language state: default to Marathi or current app language
@@ -75,7 +90,17 @@ export function Documents() {
           documentService.getDocumentLogs()
         ]);
         setStudents(studentList);
-        setDocumentLogs(logs);
+        if (studentList.length === 0) {
+          setDocumentLogs([]);
+          if (logs.length > 0) {
+            documentService.deleteAllDocumentLogs().catch(() => {});
+          }
+        } else {
+          const validLogs = (logs || []).filter(l => 
+            studentList.some(s => s.id === l.studentId || s.studentId === l.studentId || (s.grNumber && s.grNumber === l.grNumber))
+          );
+          setDocumentLogs(validLogs);
+        }
 
         // Pre-select student
         if (paramStudentId) {
@@ -112,7 +137,9 @@ export function Documents() {
   };
 
   const handleTabChange = (tab: DocTab) => {
-    setSearchParams({ type: tab, ...(selectedStudentId ? { studentId: selectedStudentId } : {}) });
+    const route = tab === 'nirgam-utara' ? 'nirgam-utara' : tab;
+    const query = selectedStudentId ? `?studentId=${selectedStudentId}` : '';
+    navigate(`/documents/${route}${query}`);
   };
 
   const handleApplyModalChanges = async (
@@ -148,25 +175,35 @@ export function Documents() {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
     if (!selectedStudent) return;
 
-    // Log the issuance to Firestore and cache
-    const docType = currentTab === 'tc' ? 'TC' : currentTab === 'bonafide' ? 'BONAFIDE' : 'NIRGAM_UTARA';
-    await documentService.logDocumentIssue({
-      documentType: docType,
-      studentId: selectedStudent.studentId || selectedStudent.grNumber,
-      studentName: selectedStudent.studentName,
-      grNumber: selectedStudent.grNumber,
-      studentClass: selectedStudent.admissionClass,
-      issuedDate: issueDate,
-      academicYear: settings.academicYear || '2026-2027',
-      issuedBy: 'Principal Office',
-      purpose: currentTab === 'bonafide' ? bonafidePurpose : leavingReason
-    });
+    // Log the issuance in the background without blocking the synchronous print dialog
+    try {
+      const docType = currentTab === 'tc' ? 'TC' : currentTab === 'bonafide' ? 'BONAFIDE' : 'NIRGAM_UTARA';
+      documentService.logDocumentIssue({
+        documentType: docType,
+        studentId: selectedStudent.studentId || selectedStudent.grNumber,
+        studentName: selectedStudent.studentName,
+        grNumber: selectedStudent.grNumber,
+        studentClass: selectedStudent.admissionClass,
+        issuedDate: issueDate,
+        academicYear: settings.academicYear || '2026-2027',
+        issuedBy: 'Principal Office',
+        purpose: currentTab === 'bonafide' ? bonafidePurpose : leavingReason
+      }).catch((err) => console.warn('Document log background error:', err));
+    } catch (e) {
+      console.warn('Logging error:', e);
+    }
 
-    // Trigger Print
-    window.print();
+    const docTitle = currentTab === 'tc' 
+      ? `TC_${selectedStudent.grNumber}_${selectedStudent.studentName}`
+      : currentTab === 'bonafide'
+      ? `Bonafide_${selectedStudent.grNumber}_${selectedStudent.studentName}`
+      : `Nirgam_${selectedStudent.grNumber}_${selectedStudent.studentName}`;
+
+    // Trigger Print cleanly across sandboxed iframe and standalone tabs
+    printCertificateElement('certificate-print-area', docTitle);
   };
 
   if (loading) {
@@ -255,29 +292,6 @@ export function Documents() {
             >
               <History className="w-4 h-4 text-slate-500" />
               <span>{showLogs ? 'लॉग लपवा' : 'नोंदवही / Logs'} ({documentLogs.length})</span>
-            </button>
-
-            {/* Edit Certificate Details Button */}
-            <button
-              type="button"
-              id="btn-open-edit-doc-modal"
-              onClick={() => setIsEditModalOpen(true)}
-              disabled={!selectedStudent}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold shadow-md flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
-            >
-              <Edit3 className="w-4 h-4" />
-              <span>{docLang === 'mr' ? 'दाखला संपादित करा (Edit)' : docLang === 'hi' ? 'दाखिला संपादित करें (Edit)' : 'Edit Certificate'}</span>
-            </button>
-
-            <button
-              type="button"
-              id="btn-print-certificate"
-              onClick={handlePrint}
-              disabled={!selectedStudent}
-              className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-lg text-sm font-bold shadow-md flex items-center gap-2 transition disabled:opacity-50 cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              <span>{docLang === 'mr' ? 'प्रिंट करा (Print)' : docLang === 'hi' ? 'प्रिंट करें (Print)' : 'Print Certificate'}</span>
             </button>
           </div>
         </div>
@@ -588,7 +602,7 @@ export function Documents() {
           </div>
 
           {/* Certificate Print Paper Canvas */}
-          <div className="p-2 sm:p-4 bg-slate-200/60 rounded-2xl border border-slate-300/80 shadow-inner flex justify-center">
+          <div id="certificate-print-area" className="p-2 sm:p-4 bg-slate-200/60 rounded-2xl border border-slate-300/80 shadow-inner flex justify-center print:bg-transparent print:p-0 print:border-none print:shadow-none">
             {currentTab === 'tc' && (
               <TransferCertificate
                 student={selectedStudent}

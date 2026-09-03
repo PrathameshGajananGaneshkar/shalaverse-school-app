@@ -26,6 +26,7 @@ import { StudentViewModal } from '../components/students/StudentViewModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { exportStudentsToCSV } from '../utils/exportUtils';
+import { CLASS_OPTIONS } from '../components/students/StudentFilter';
 
 export function Dashboard() {
   const { t } = useLanguage();
@@ -48,7 +49,20 @@ export function Dashboard() {
         documentService.getDocumentLogs()
       ]);
       setStudents(data);
-      setDocLogsCount(logs.length);
+
+      // If no students are in the register (all deleted), documents issued MUST be 0
+      if (!data || data.length === 0) {
+        setDocLogsCount(0);
+        if (logs && logs.length > 0) {
+          documentService.deleteAllDocumentLogs().catch(() => {});
+        }
+      } else {
+        // Only count documents for students who currently exist in the school register
+        const validLogs = (logs || []).filter(l => 
+          data.some(s => s.id === l.studentId || s.studentId === l.studentId || (s.grNumber && s.grNumber === l.grNumber))
+        );
+        setDocLogsCount(validLogs.length);
+      }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -92,8 +106,19 @@ export function Dashboard() {
     if (!studentToDelete || !studentToDelete.id) return;
     setIsDeleting(true);
     try {
-      await studentService.deleteStudent(studentToDelete.id);
-      setStudents(prev => prev.filter(s => s.id !== studentToDelete.id));
+      await studentService.deleteStudent(studentToDelete.id, studentToDelete.grNumber);
+      const remaining = students.filter(s => s.id !== studentToDelete.id);
+      setStudents(remaining);
+      if (remaining.length === 0) {
+        setDocLogsCount(0);
+        await documentService.deleteAllDocumentLogs();
+      } else {
+        const updatedLogs = await documentService.getDocumentLogs();
+        const validLogs = (updatedLogs || []).filter(l => 
+          remaining.some(s => s.id === l.studentId || s.studentId === l.studentId || (s.grNumber && s.grNumber === l.grNumber))
+        );
+        setDocLogsCount(validLogs.length);
+      }
       setStudentToDelete(null);
     } catch (err) {
       console.error('Delete error:', err);
@@ -279,12 +304,12 @@ export function Dashboard() {
             {t('studentsByClass')} (Strength Overview)
           </h3>
           <span className="text-xs font-semibold text-slate-500">
-            Total Classes: {Object.keys(classCounts).length}
+            Total Classes: {CLASS_OPTIONS.length}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          {['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'].map((cls) => {
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          {CLASS_OPTIONS.map((cls) => {
             const count = classCounts[cls] || 0;
             return (
               <div

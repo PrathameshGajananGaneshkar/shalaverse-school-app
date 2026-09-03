@@ -16,7 +16,7 @@ import { Student, AdmissionClass } from '../../types';
 import { CLASS_OPTIONS } from './StudentFilter';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSettings } from '../../context/SettingsContext';
-import { transliterateToDevanagari } from '../../utils/devanagariUtils';
+import { transliterateToDevanagari, deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
 import { generateStudentId } from '../../utils/studentIdGenerator';
 
 interface StudentFormProps {
@@ -204,7 +204,16 @@ export function StudentForm({
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    await onSubmit(formData);
+    const cleanedData = {
+      ...formData,
+      studentName: deduplicateRepeatedPhrase(formData.studentName).trim(),
+      studentNameLocal: deduplicateRepeatedPhrase(formData.studentNameLocal || '').trim(),
+      fatherName: deduplicateRepeatedPhrase(formData.fatherName).trim(),
+      fatherNameLocal: deduplicateRepeatedPhrase(formData.fatherNameLocal || '').trim(),
+      motherName: deduplicateRepeatedPhrase(formData.motherName).trim(),
+      motherNameLocal: deduplicateRepeatedPhrase(formData.motherNameLocal || '').trim(),
+    };
+    await onSubmit(cleanedData);
   };
 
   return (

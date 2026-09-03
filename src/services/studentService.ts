@@ -16,6 +16,7 @@ import { db } from '../firebase/config';
 import { Student } from '../types';
 import { INITIAL_SAMPLE_STUDENTS } from '../utils/seedData';
 import { generateStudentId } from '../utils/studentIdGenerator';
+import { documentService } from './documentService';
 
 const COLLECTION_NAME = 'students';
 const LOCAL_STORAGE_KEY = 'shalaverse_students_cache';
@@ -229,6 +230,13 @@ export const studentService = {
       console.warn('Firestore delete by studentId fallback:', err);
     }
 
+    // Delete associated document logs for this student
+    try {
+      await documentService.deleteLogsByStudent(id, grNumber);
+    } catch {
+      // ignore
+    }
+
     // Update local cache
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (cached) {
@@ -240,6 +248,11 @@ export const studentService = {
           (grNumber ? s.grNumber !== grNumber : true)
         );
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+
+        // If no students left, also clear all document logs
+        if (updated.length === 0) {
+          await documentService.deleteAllDocumentLogs();
+        }
       } catch {
         // ignore
       }
@@ -264,6 +277,13 @@ export const studentService = {
       }
     } catch (err) {
       console.warn('Firestore deleteAll error, wiping local cache:', err);
+    }
+
+    // Completely wipe all document logs as well
+    try {
+      await documentService.deleteAllDocumentLogs();
+    } catch (err) {
+      console.warn('Error wiping document logs on deleteAllStudents:', err);
     }
 
     // Clear all local student caches and lock initialized flag so sample records never re-appear

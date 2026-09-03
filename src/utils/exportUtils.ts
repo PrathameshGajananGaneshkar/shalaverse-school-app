@@ -573,6 +573,208 @@ export function downloadSample100StudentsExcel(format: 'xlsx' | 'csv' = 'xlsx') 
 }
 
 export function triggerPrint() {
-  window.print();
+  printCertificateElement('certificate-print-area', 'Certificate');
+}
+
+/**
+ * Robust cross-browser and iframe certificate printer
+ * Handles sandboxed iframes (like AI Studio preview) by opening an isolated printable tab
+ */
+export function printCertificateElement(elementId: string = 'certificate-print-area', docTitle: string = 'Certificate') {
+  try {
+    window.focus();
+  } catch (e) {
+    // ignore
+  }
+
+  const targetElement = document.getElementById(elementId) || document.querySelector('.a4-document-page');
+
+  if (!targetElement) {
+    try {
+      window.print();
+    } catch (e) {
+      console.error('Direct window.print error:', e);
+    }
+    return;
+  }
+
+  // Gather all active stylesheets and style blocks from document
+  const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map(s => s.outerHTML)
+    .join('\n');
+
+  // Clone clean certificate DOM without internal edit buttons
+  const clone = targetElement.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('button, .print\\:hidden, [title*="Edit"], [title*="संपादित"]').forEach(el => el.remove());
+
+  const printableHTML = `<!DOCTYPE html>
+<html lang="mr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${docTitle} - Print</title>
+    ${styles}
+    <style>
+      @page {
+        size: A4 portrait;
+        margin: 4mm 5mm;
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      body {
+        margin: 0;
+        padding: 16px 0;
+        background: #f1f5f9;
+        font-family: serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .print-bar {
+        width: 100%;
+        max-width: 210mm;
+        background: #0f172a;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 12px;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+        font-family: sans-serif;
+      }
+      .print-act-btn {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 8px 24px;
+        font-size: 15px;
+        font-weight: bold;
+        border-radius: 8px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .print-act-btn:hover {
+        background: #1d4ed8;
+      }
+      .close-act-btn {
+        background: #475569;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        font-size: 14px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .close-act-btn:hover {
+        background: #334155;
+      }
+      .a4-document-page {
+        width: 100% !important;
+        max-width: 210mm !important;
+        min-height: 297mm !important;
+        background: white !important;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1) !important;
+        box-sizing: border-box !important;
+        margin: 0 auto !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+      }
+      .a4-inner-box {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+      }
+      @media print {
+        body {
+          background: white !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .print-bar {
+          display: none !important;
+        }
+        .a4-document-page {
+          box-shadow: none !important;
+          border: 2px solid #000000 !important;
+          padding: 3mm 4mm !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 285mm !important;
+          margin: 0 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+        }
+        .a4-inner-box {
+          flex: 1 !important;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: space-between !important;
+        }
+        button, .print\\:hidden, [title*="Edit"], [title*="संपादित"] {
+          display: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="print-bar">
+      <span style="font-size: 14px; font-weight: bold;">📄 ${docTitle}</span>
+      <div style="display: flex; gap: 10px;">
+        <button class="print-act-btn" onclick="window.print()">🖨️ प्रिंट करा / Save as PDF</button>
+        <button class="close-act-btn" onclick="window.close()">✕ बंद करा</button>
+      </div>
+    </div>
+    ${clone.outerHTML}
+    <script>
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          try {
+            window.print();
+          } catch(e) {
+            console.error('Print auto trigger:', e);
+          }
+        }, 350);
+      });
+    </script>
+  </body>
+</html>`;
+
+  // Create Blob & URL for seamless popup that escapes iframe sandbox
+  try {
+    const blob = new Blob([printableHTML], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    
+    if (!win) {
+      // If popup blocked, create a temporary download / open link
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  } catch (err) {
+    console.warn('Blob print trigger failed, attempting direct window.print:', err);
+    try {
+      window.print();
+    } catch (e) {
+      console.error('Native print also failed:', e);
+    }
+  }
+}
+
+export function printDocumentDirectly() {
+  printCertificateElement('certificate-print-area', 'Certificate');
 }
 

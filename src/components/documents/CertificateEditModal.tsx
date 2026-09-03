@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { Student, AdmissionClass } from '../../types';
 import { CLASS_OPTIONS } from '../students/StudentFilter';
-import { transliterateToDevanagari } from '../../utils/devanagariUtils';
+import { transliterateToDevanagari, deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
 import { dateToWords } from '../../utils/dateUtils';
 import { generateStudentId } from '../../utils/studentIdGenerator';
 
@@ -142,7 +142,16 @@ export function CertificateEditModal({
   const handleSubmit = async (saveToDb: boolean) => {
     setSaving(true);
     try {
-      await onApplyChanges(formData, docFields, saveToDb);
+      const cleanedStudent: Student = {
+        ...formData,
+        studentName: deduplicateRepeatedPhrase(formData.studentName).trim(),
+        studentNameLocal: deduplicateRepeatedPhrase(formData.studentNameLocal || '').trim(),
+        fatherName: deduplicateRepeatedPhrase(formData.fatherName).trim(),
+        fatherNameLocal: deduplicateRepeatedPhrase(formData.fatherNameLocal || '').trim(),
+        motherName: deduplicateRepeatedPhrase(formData.motherName).trim(),
+        motherNameLocal: deduplicateRepeatedPhrase(formData.motherNameLocal || '').trim(),
+      };
+      await onApplyChanges(cleanedStudent, docFields, saveToDb);
       setSuccessMsg(saveToDb ? 'माहिती दाखल्यावर लागू झाली आणि डेटाबेसमध्ये सेव्ह झाली!' : 'माहिती दाखल्यावर यशस्वीरित्या लागू झाली!');
       setTimeout(() => {
         setSuccessMsg(null);

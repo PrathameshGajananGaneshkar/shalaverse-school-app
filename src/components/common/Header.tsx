@@ -7,7 +7,6 @@ import {
   LogOut, 
   School, 
   ChevronDown,
-  PlusCircle,
   Sparkles,
   ShieldCheck
 } from 'lucide-react';
@@ -102,19 +101,6 @@ export function Header({ onToggleSidebar }: HeaderProps) {
 
         {/* Right Section: Actions & Dropdowns */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Quick Add Student button if not on add-student page */}
-          {location.pathname !== '/add-student' && (
-            <button
-              id="btn-header-add-student"
-              type="button"
-              onClick={() => navigate('/add-student')}
-              className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-xs transition"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>{t('addStudent')}</span>
-            </button>
-          )}
-
           {/* Language Selector Dropdown */}
           <div className="relative" ref={langRef}>
             <button

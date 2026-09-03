@@ -102,9 +102,10 @@ export function StudentViewModal({
               id="btn-modal-issue-bonafide"
               onClick={() => {
                 onClose();
-                navigate(`/documents/bonafide?studentId=${student.id || student.studentId}`);
+                const sId = student.id || student.studentId || student.grNumber;
+                navigate(`/documents/bonafide?studentId=${sId}`);
               }}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <FileCheck2 className="w-3.5 h-3.5" />
               Bonafide
@@ -115,9 +116,10 @@ export function StudentViewModal({
               id="btn-modal-issue-tc"
               onClick={() => {
                 onClose();
-                navigate(`/documents/tc?studentId=${student.id || student.studentId}`);
+                const sId = student.id || student.studentId || student.grNumber;
+                navigate(`/documents/tc?studentId=${sId}`);
               }}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <FileText className="w-3.5 h-3.5" />
               T.C.
@@ -128,9 +130,10 @@ export function StudentViewModal({
               id="btn-modal-issue-nirgam"
               onClick={() => {
                 onClose();
-                navigate(`/documents/nirgam-utara?studentId=${student.id || student.studentId}`);
+                const sId = student.id || student.studentId || student.grNumber;
+                navigate(`/documents/nirgam-utara?studentId=${sId}`);
               }}
-              className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+              className="px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
             >
               <Scroll className="w-3.5 h-3.5" />
               Nirgam
