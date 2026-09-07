@@ -21,14 +21,14 @@ interface NirgamUtaraProps {
   extractNumber?: string;
   issueDate?: string;
   applicantName?: string;
-  lang?: 'en' | 'mr' | 'hi';
+  lang?: 'en' | 'mr';
   onEdit?: () => void;
 }
 
 // Format standard / class specifically for Register
-function formatRegisterClass(rawClass?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+function formatRegisterClass(rawClass?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (!rawClass) {
-    return lang === 'mr' ? '२ री' : lang === 'hi' ? '२ वीं' : '2nd Std';
+    return lang === 'mr' ? '२ री' : '2nd Std';
   }
   const clean = rawClass.trim();
   const numMatch = clean.match(/(\d+)/);
@@ -53,16 +53,6 @@ function formatRegisterClass(rawClass?: string, lang: 'en' | 'mr' | 'hi' = 'mr')
       return division ? `${base} (${division})` : base;
     }
 
-    if (lang === 'hi') {
-      const hiOrdinal: Record<number, string> = {
-        1: '१ वीं', 2: '२ वीं', 3: '३ वीं', 4: '४ वीं', 5: '५ वीं',
-        6: '६ वीं', 7: '७ वीं', 8: '८ वीं', 9: '९ वीं', 10: '१० वीं',
-        11: '११ वीं', 12: '१२ वीं'
-      };
-      const base = hiOrdinal[num] || `${num} वीं`;
-      return division ? `${base} (${division})` : base;
-    }
-
     // English
     const enOrdinal: Record<number, string> = {
       1: '1st', 2: '2nd', 3: '3rd', 4: '4th', 5: '5th',
@@ -80,7 +70,7 @@ function formatRegisterClass(rawClass?: string, lang: 'en' | 'mr' | 'hi' = 'mr')
 }
 
 // Clean Caste Formatting strictly separated by language
-function formatRegisterCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+function formatRegisterCaste(student: Student, lang: 'en' | 'mr'): string {
   if (lang === 'en') {
     const rawCaste = student.caste || student.casteLocal || 'OPEN';
     let clean = cleanEnglishText(rawCaste).replace(/[()[\]{}]/g, '').trim().toUpperCase();
@@ -121,7 +111,7 @@ export function NirgamUtara({
   onEdit
 }: NirgamUtaraProps) {
   const { settings } = useSettings();
-  const [currentLang, setCurrentLang] = useState<'en' | 'mr' | 'hi'>(initialLang);
+  const [currentLang, setCurrentLang] = useState<'en' | 'mr'>(initialLang);
 
   // Sync when prop changes
   useEffect(() => {
@@ -129,7 +119,7 @@ export function NirgamUtara({
   }, [initialLang]);
 
   // Parse Taluka and District intelligently based on current language
-  const parseAddressDetails = (l: 'en' | 'mr' | 'hi') => {
+  const parseAddressDetails = (l: 'en' | 'mr') => {
     const rawAddr = settings.address || '';
     if (l === 'en') {
       let taluka = 'Chikhli';
@@ -164,7 +154,7 @@ export function NirgamUtara({
   };
 
   // Pure language-specific default values generator
-  const getDefaultsForLanguage = (l: 'en' | 'mr' | 'hi') => {
+  const getDefaultsForLanguage = (l: 'en' | 'mr') => {
     const loc = parseAddressDetails(l);
     const classStr = formatRegisterClass(student.admissionClass, l);
 
@@ -178,17 +168,6 @@ export function NirgamUtara({
         leavingClass: classStr,
         identificationMarks: '1. Mole on right hand  2. Scar on forehead',
         remarks: 'Progress: Good, Conduct: Satisfactory. Verified with original register.'
-      };
-    } else if (l === 'hi') {
-      return {
-        taluka: loc.taluka,
-        district: loc.district,
-        place: loc.place || 'मु. पो. चिखली',
-        occupation: 'कृषि / व्यवसाय',
-        currentClass: classStr,
-        leavingClass: classStr,
-        identificationMarks: '१. दाहिने हाथ पर तिल  २. माथे पर निशान',
-        remarks: 'प्रगति: उत्तम, आचरण: संतोषजनक। मूल जनरल रजिस्टर से मिलान कर प्रमाणित किया गया।'
       };
     } else {
       // Marathi (Default - 100% Pure Marathi)
@@ -232,8 +211,8 @@ export function NirgamUtara({
       try {
         const data = JSON.parse(saved);
         
-        if (currentLang === 'mr' || currentLang === 'hi') {
-          // If Marathi/Hindi mode, strictly cleanse any English leaks from saved data
+        if (currentLang === 'mr') {
+          // If Marathi mode, strictly cleanse any English leaks from saved data
           const cleanPlace = cleanAndLocalizePlace(data.place || defaults.place, currentLang);
           const cleanTaluka = cleanAndLocalizeTaluka(data.taluka || defaults.taluka, currentLang);
           const cleanDistrict = cleanAndLocalizePlace(data.district || defaults.district, currentLang).replace(/^(जि\.?|जिला)\s*/, '').trim() || 'बुलढाणा';
@@ -353,38 +332,6 @@ export function NirgamUtara({
         { no: '२१', label: 'विवरण' }
       ]
     },
-    hi: {
-      title: 'विद्यार्थी प्रवेश निर्गम पंजीयन रजिस्टर',
-      schoolNameLabel: 'विद्यालय का नाम',
-      talukaLabel: 'तहसील / तालुका',
-      districtLabel: 'जिला',
-      dateLabel: 'दिनांक',
-      placeLabel: 'स्थान',
-      principalSign: 'प्रधानाचार्य के हस्ताक्षर',
-      rows: [
-        { no: '१', label: 'प्रवेश क्रमांक' },
-        { no: '२', label: 'विद्यार्थी का पूरा नाम उपनाम सहित' },
-        { no: '३', label: 'पिता का नाम / जीवित न होने पर अभिभावक का नाम' },
-        { no: '४', label: 'जाति' },
-        { no: '५', label: 'पिता / अभिभावक का व्यवसाय' },
-        { no: '६', label: 'मातृभाषा' },
-        { no: '७', label: 'प्रवेश दिनांक' },
-        { no: '८', label: 'जन्म दिनांक — अंक' },
-        { no: '९', label: 'जन्म दिनांक — अक्षर' },
-        { no: '१०', label: 'जन्म स्थान तहसील व जिला' },
-        { no: '११', label: 'प्रवेश समय कक्षा' },
-        { no: '१२', label: 'पूर्व विद्यालय का नाम' },
-        { no: '१३', label: 'कक्षा' },
-        { no: '१४', label: 'प्रवेश देने वाले अधिकारी के हस्ताक्षर' },
-        { no: '१५', label: 'निर्गम समय कक्षा' },
-        { no: '१६', label: 'निर्गम दिनांक' },
-        { no: '१७', label: 'विद्यालय छोड़ने का कारण' },
-        { no: '१८', label: 'पहचान चिह्न (संक्षेप में दो चिह्न)' },
-        { no: '१९', label: 'निर्गम समय प्रविष्टि करने वाले अधिकारी के हस्ताक्षर' },
-        { no: '२०', label: 'प्रधानाचार्य के हस्ताक्षर' },
-        { no: '२१', label: 'विवरण' }
-      ]
-    },
     en: {
       title: 'STUDENT ADMISSION & WITHDRAWAL REGISTER',
       schoolNameLabel: 'School Name',
@@ -438,9 +385,6 @@ export function NirgamUtara({
   const getMotherTongueDisplayName = () => {
     if (currentLang === 'en') {
       return cleanEnglishText(student.motherTongue) || 'Marathi';
-    }
-    if (currentLang === 'hi') {
-      return 'मराठी';
     }
     return 'मराठी';
   };

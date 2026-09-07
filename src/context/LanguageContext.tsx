@@ -15,7 +15,7 @@ const LanguageContext = createContext<LanguageContextType | undefined>(undefined
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('shalaverse_language') as Language;
-    return saved && (saved === 'en' || saved === 'mr' || saved === 'hi') ? saved : 'en';
+    return saved && (saved === 'en' || saved === 'mr') ? saved : 'mr';
   });
 
   const setLanguage = (lang: Language) => {

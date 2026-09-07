@@ -69,33 +69,7 @@ function mrYearToWords(year: number): string {
   return String(year);
 }
 
-// Hindi Date in Words
-const HI_DAYS = [
-  '', 'एक', 'दो', 'तीन', 'चार', 'पाँच', 'छह', 'सात', 'आठ', 'नौ', 'दस',
-  'ग्यारह', 'बारह', 'तेरह', 'चौदह', 'पंद्रह', 'सोलह', 'सत्रह', 'अठारह', 'उन्नीस', 'बीस',
-  'इक्कीस', 'बाईस', 'तेईस', 'चौबीस', 'पच्चीस', 'छब्बीस', 'सत्ताईस', 'अट्ठाईस', 'उनतीस', 'तीस', 'इकतीस'
-];
-
-const HI_MONTHS = [
-  'जनवरी', 'फरवरी', 'मार्च', 'अप्रैल', 'मई', 'जून',
-  'जुलाई', 'अगस्त', 'सितंबर', 'अक्टूबर', 'नवंबर', 'दिसंबर'
-];
-
-function hiYearToWords(year: number): string {
-  if (year >= 2000 && year < 2100) {
-    const rem = year - 2000;
-    if (rem === 0) return 'दो हज़ार';
-    if (rem <= 31) return `दो हज़ार ${HI_DAYS[rem] || rem}`;
-    return `दो हज़ार ${rem}`;
-  }
-  if (year >= 1900 && year < 2000) {
-    const rem = year - 1900;
-    return `उन्नीस सौ ${rem}`;
-  }
-  return String(year);
-}
-
-export function dateToWords(dateString?: string | null, lang: 'en' | 'mr' | 'hi' = 'en'): string {
+export function dateToWords(dateString?: string | null, lang: 'en' | 'mr' = 'en'): string {
   if (!dateString) return '-';
   try {
     let day = 0;
@@ -139,13 +113,6 @@ export function dateToWords(dateString?: string | null, lang: 'en' | 'mr' | 'hi'
         const dStr = MR_DAYS[day] || String(day);
         const mStr = MR_MONTHS[monthIdx] || '';
         const yStr = mrYearToWords(year);
-        return `${dStr} ${mStr} ${yStr}`;
-      }
-
-      if (lang === 'hi') {
-        const dStr = HI_DAYS[day] || String(day);
-        const mStr = HI_MONTHS[monthIdx] || '';
-        const yStr = hiYearToWords(year);
         return `${dStr} ${mStr} ${yStr}`;
       }
 

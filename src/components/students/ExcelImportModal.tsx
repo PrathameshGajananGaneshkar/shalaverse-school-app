@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   FileSpreadsheet, 
@@ -15,6 +15,7 @@ import * as XLSX from 'xlsx';
 import { Student, AdmissionClass } from '../../types';
 import { studentService } from '../../services/studentService';
 import { deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
+import { normalizeClass } from '../../utils/exportUtils';
 
 interface ExcelImportModalProps {
   isOpen: boolean;
@@ -31,18 +32,18 @@ interface ColumnOption {
 }
 
 const REQUIRED_COLUMNS: ColumnOption[] = [
-  { key: 'studentName', label: 'विद्यार्थ्याचे नाव (Student Name)', field: 'studentName', required: true },
-  { key: 'grNumber', label: 'दाखल / GR क्रमांक (GR No)', field: 'grNumber', required: true },
-  { key: 'admissionClass', label: 'वर्ग / इयत्ता (Class)', field: 'admissionClass' },
-  { key: 'admissionYear', label: 'प्रवेश वर्ष (Admission Year)', field: 'admissionYear' },
-  { key: 'admissionDate', label: 'प्रवेश तारीख (Admission Date)', field: 'admissionDate' },
-  { key: 'birthDate', label: 'जन्मतारीख (Birth Date)', field: 'birthDate' },
-  { key: 'fatherName', label: 'वडिलांचे नाव (Father Name)', field: 'fatherName' },
-  { key: 'motherName', label: 'आईचे नाव (Mother Name)', field: 'motherName' },
-  { key: 'mobile', label: 'मोबाईल नंबर (Mobile)', field: 'mobile' },
-  { key: 'caste', label: 'जात / प्रवर्ग (Caste)', field: 'caste' },
-  { key: 'uid', label: 'आधार नंबर (UID/Aadhaar)', field: 'uid' },
-  { key: 'address', label: 'पत्ता / गाव (Address)', field: 'address' }
+  { key: 'studentName', label: 'Student Name', field: 'studentName', required: true },
+  { key: 'grNumber', label: 'GR Number', field: 'grNumber', required: true },
+  { key: 'admissionClass', label: 'Admission Class', field: 'admissionClass' },
+  { key: 'admissionYear', label: 'Admission Year', field: 'admissionYear' },
+  { key: 'admissionDate', label: 'Admission Date', field: 'admissionDate' },
+  { key: 'birthDate', label: 'Birth Date (DOB)', field: 'birthDate' },
+  { key: 'fatherName', label: "Father's Name", field: 'fatherName' },
+  { key: 'motherName', label: "Mother's Name", field: 'motherName' },
+  { key: 'mobile', label: 'Mobile Number', field: 'mobile' },
+  { key: 'caste', label: 'Caste / Category', field: 'caste' },
+  { key: 'uid', label: 'Aadhaar / UID', field: 'uid' },
+  { key: 'address', label: 'Address / Village', field: 'address' }
 ];
 
 export function ExcelImportModal({
@@ -62,8 +63,41 @@ export function ExcelImportModal({
   
   const [parsedStudents, setParsedStudents] = useState<Partial<Student>[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isImporting, setIsImporting] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const cancelTokenRef = useRef<{ isCancelled: boolean }>({ isCancelled: false });
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; pct: number } | null>(null);
   const [activeTab, setActiveTab] = useState<'preview' | 'mapping'>('preview');
+
+  const resetInternalState = () => {
+    setWorkbook(null);
+    setSheetNames([]);
+    setSelectedSheet('');
+    setRawRows([]);
+    setHeaderRowIdx(0);
+    setDetectedHeaders([]);
+    setColumnMapping({});
+    setParsedStudents([]);
+    setIsProcessing(false);
+    setIsImporting(false);
+    setIsCancelling(false);
+    setImportProgress(null);
+    setActiveTab('preview');
+  };
+
+  const handleCancelOrClose = () => {
+    if (isImporting || isProcessing) {
+      cancelTokenRef.current.isCancelled = true;
+      setIsCancelling(true);
+      setTimeout(() => {
+        resetInternalState();
+        onClose();
+      }, 150);
+      return;
+    }
+    resetInternalState();
+    onClose();
+  };
 
   // Load File when opened
   useEffect(() => {
@@ -90,7 +124,7 @@ export function ExcelImportModal({
         }
       } catch (err) {
         console.error('Failed to parse excel file:', err);
-        alert('Excel फाईल उघडता आली नाही. कृपया वैध .xlsx किंवा .csv फाईल निवडा.');
+        alert('Could not open Excel file. Please choose a valid .xlsx or .csv file.');
       } finally {
         setIsProcessing(false);
       }
@@ -186,14 +220,7 @@ export function ExcelImportModal({
       }
 
       // Normalize Class
-      const rawClass = getVal('admissionClass').toLowerCase();
-      let matchedClass: AdmissionClass = '1st';
-      for (const cls of validClasses) {
-        if (rawClass.includes(cls.toLowerCase()) || rawClass.includes(cls.replace('th', '').replace('st', '').replace('nd', '').replace('rd', ''))) {
-          matchedClass = cls;
-          break;
-        }
-      }
+      const matchedClass: AdmissionClass = normalizeClass(getVal('admissionClass'));
 
       // Dates parsing
       let rawDob = getVal('birthDate') || '2015-05-10';
@@ -247,33 +274,137 @@ export function ExcelImportModal({
 
   const handleConfirmImport = async () => {
     if (parsedStudents.length === 0) {
-      alert('इम्पोर्ट करण्यासाठी कोणताही विद्यार्थी सापडला नाही.');
+      alert('No student records found to import.');
       return;
     }
 
+    cancelTokenRef.current = { isCancelled: false };
+    setIsImporting(true);
     setIsProcessing(true);
+    setIsCancelling(false);
     setImportProgress({ current: 0, total: parsedStudents.length, pct: 0 });
 
     try {
-      const result = await studentService.importBackupData(parsedStudents, (current, total) => {
-        const pct = Math.round((current / total) * 100);
-        setImportProgress({ current, total, pct });
-      });
+      const result = await studentService.importBackupData(
+        parsedStudents,
+        (current, total) => {
+          const pct = Math.min(100, Math.round((current / (total || 1)) * 100));
+          setImportProgress({ current, total, pct });
+        },
+        cancelTokenRef.current
+      );
+
+      if (result.cancelled) {
+        setIsImporting(false);
+        setIsProcessing(false);
+        setIsCancelling(false);
+        setImportProgress(null);
+        resetInternalState();
+        onClose();
+        return;
+      }
 
       setTimeout(() => {
+        setIsImporting(false);
         setIsProcessing(false);
+        setIsCancelling(false);
         setImportProgress(null);
         onImportSuccess(result.added);
+        resetInternalState();
         onClose();
-      }, 500);
+      }, 300);
     } catch (err) {
       console.error('Import error:', err);
-      alert('डेटा इम्पोर्ट करताना त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
+      alert('Error importing student data. Please try again.');
+      setIsImporting(false);
       setIsProcessing(false);
+      setIsCancelling(false);
     }
   };
 
   if (!isOpen) return null;
+
+  // Active Progress View (matching the delete progress modal in user's request)
+  if (isImporting) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2.5 text-emerald-600">
+              <div className="p-2 bg-emerald-100 rounded-xl">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Import Students</h3>
+                <p className="text-xs text-slate-500">
+                  Total Records: <span className="font-bold text-emerald-600">{parsedStudents.length}</span>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="btn-close-importing-x"
+              onClick={handleCancelOrClose}
+              className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer transition"
+              title="Cancel"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Body: Progress Card */}
+          <div className="py-4">
+            <div className="space-y-4 p-4 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+              <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
+                <RefreshCw className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+                <span>Importing Student Records</span>
+              </div>
+              <p className="text-xs text-emerald-900 leading-relaxed">
+                Importing <strong>{parsedStudents.length} student records</strong> into the General Register. Please wait...
+              </p>
+
+              {/* Progress Indicator */}
+              <div className="space-y-1.5 p-3 bg-white rounded-lg border border-emerald-200 shadow-2xs">
+                <div className="flex justify-between text-xs font-semibold text-emerald-900">
+                  <span>Importing...</span>
+                  <span>
+                    {importProgress?.current || 0} / {importProgress?.total || parsedStudents.length} Records ({importProgress?.pct || 0}%)
+                  </span>
+                </div>
+                <div className="w-full bg-emerald-100 rounded-full h-2.5 overflow-hidden">
+                  <div
+                    className="bg-emerald-600 h-2.5 rounded-full transition-all duration-150"
+                    style={{ width: `${importProgress?.pct || 0}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled
+                  className="flex-1 py-2.5 px-4 bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs opacity-90 cursor-not-allowed"
+                >
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Importing...</span>
+                </button>
+                <button
+                  type="button"
+                  id="btn-cancel-import-progress"
+                  onClick={handleCancelOrClose}
+                  className="py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700"
+                >
+                  <span>{isCancelling ? 'Cancelling...' : 'Cancel'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
@@ -287,19 +418,21 @@ export function ExcelImportModal({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold">
-                Excel / CSV डेटा इम्पोर्ट विझार्ड (Bulk Import Hub)
+                Import Students (Excel / CSV)
               </h2>
               <p className="text-xs text-slate-400">
                 {parsedStudents.length > 0 
-                  ? `एकूण ${parsedStudents.length} विद्यार्थ्यांचा डेटा सापडला आहे` 
-                  : 'तुमची Excel फाईल तपासा व सेव्ह करा'}
+                  ? `${parsedStudents.length} student records found` 
+                  : 'Check and verify your Excel file'}
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
-            disabled={isProcessing}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            type="button"
+            id="btn-import-modal-close-x"
+            onClick={handleCancelOrClose}
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+            title="Cancel"
           >
             <X className="w-5 h-5" />
           </button>
@@ -327,21 +460,21 @@ export function ExcelImportModal({
           <div className="flex items-center gap-1.5 bg-slate-200 p-1 rounded-lg">
             <button
               onClick={() => setActiveTab('preview')}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs font-bold rounded-md transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'preview' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Eye className="w-3.5 h-3.5" />
-              <span>डेटा प्रिव्ह्यू (Data Preview)</span>
+              <span>Data Preview</span>
             </button>
             <button
               onClick={() => setActiveTab('mapping')}
-              className={`px-3 py-1 text-xs font-bold rounded-md transition flex items-center gap-1.5 ${
+              className={`px-3 py-1 text-xs font-bold rounded-md transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'mapping' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span>कॉलम मॅपिंग (Column Settings)</span>
+              <span>Column Settings</span>
             </button>
           </div>
         </div>
@@ -352,10 +485,10 @@ export function ExcelImportModal({
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  पहिले १० रेकॉर्ड्स प्रिव्ह्यू (Showing sample 10 of {parsedStudents.length} records):
+                  Previewing first 10 of {parsedStudents.length} records:
                 </h4>
                 <span className="text-[11px] text-slate-500">
-                  सर्व माहिती बरोबर जुळली असल्यास खालील हिरव्या बटणावर क्लिक करा.
+                  Click the Import button below to save these records.
                 </span>
               </div>
 
@@ -366,12 +499,12 @@ export function ExcelImportModal({
                       <tr>
                         <th className="px-3 py-2.5">#</th>
                         <th className="px-3 py-2.5">GR No</th>
-                        <th className="px-3 py-2.5">विद्यार्थ्याचे नाव (Name)</th>
-                        <th className="px-3 py-2.5">वर्ग (Class)</th>
-                        <th className="px-3 py-2.5">जन्मतारीख (DOB)</th>
-                        <th className="px-3 py-2.5">वडिलांचे नाव</th>
-                        <th className="px-3 py-2.5">मोबाईल</th>
-                        <th className="px-3 py-2.5">जात</th>
+                        <th className="px-3 py-2.5">Student Name</th>
+                        <th className="px-3 py-2.5">Class</th>
+                        <th className="px-3 py-2.5">Birth Date</th>
+                        <th className="px-3 py-2.5">Father's Name</th>
+                        <th className="px-3 py-2.5">Mobile</th>
+                        <th className="px-3 py-2.5">Caste</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
@@ -397,7 +530,7 @@ export function ExcelImportModal({
               <div className="mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-start gap-2.5">
                 <AlertCircle className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
                 <p className="text-xs text-blue-900 leading-relaxed">
-                  जर तुमच्या Excel मधील कॉलम्सचे नाव वेगळे असेल, तर खालील ड्रॉपडाउनमधून योग्य कॉलम निवडा. सिस्टीम आपोआप त्या कॉलममधील डेटा योग्य ठिकाणी भरेल.
+                  Match Excel columns to student database fields below if auto-detection missed any.
                 </p>
               </div>
 
@@ -414,7 +547,7 @@ export function ExcelImportModal({
                         onChange={(e) => handleMappingChange(col.key, parseInt(e.target.value, 10))}
                         className="w-full text-xs bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 focus:ring-2 focus:ring-blue-500 font-medium"
                       >
-                        <option value={-1}>-- Not Assigned (रिकामे ठेवा) --</option>
+                        <option value={-1}>-- Not Assigned --</option>
                         {detectedHeaders.map((h, i) => (
                           <option key={i} value={i}>
                             {i + 1}. {h}
@@ -427,48 +560,30 @@ export function ExcelImportModal({
               </div>
             </div>
           )}
-
-          {/* Progress Indicator */}
-          {importProgress && (
-            <div className="mt-6 bg-slate-900 text-white p-4 rounded-xl shadow-lg border border-slate-700">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold">डेटाबेसमध्ये सेव्ह होत आहे...</span>
-                <span className="text-xs font-bold text-emerald-400">
-                  {importProgress.current} / {importProgress.total} ({importProgress.pct}%)
-                </span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
-                <div 
-                  className="bg-emerald-500 h-full rounded-full transition-all duration-200"
-                  style={{ width: `${importProgress.pct}%` }}
-                />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
           <button
             type="button"
-            onClick={onClose}
-            disabled={isProcessing}
-            className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+            id="btn-import-modal-cancel"
+            onClick={handleCancelOrClose}
+            className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 shadow-2xs"
           >
-            रद्द करा (Cancel)
+            <X className="w-4 h-4" />
+            <span>Cancel</span>
           </button>
 
           <button
             type="button"
+            id="btn-import-modal-confirm"
             onClick={handleConfirmImport}
             disabled={isProcessing || parsedStudents.length === 0}
             className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg transition flex items-center gap-2 cursor-pointer"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>
-              {isProcessing 
-                ? 'सेव्ह होत आहे...' 
-                : `हे सर्व ${parsedStudents.length} विद्यार्थी सेव्ह करा (Import Now)`}
+              Import All {parsedStudents.length} Students
             </span>
           </button>
         </div>

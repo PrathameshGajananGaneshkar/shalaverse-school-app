@@ -12,13 +12,13 @@ interface BonafideCertificateProps {
   issueDate?: string;
   purpose?: string;
   serialNumber?: string;
-  lang?: 'en' | 'mr' | 'hi';
+  lang?: 'en' | 'mr';
   onEdit?: () => void;
 }
 
 // Clean and format class for Bonafide
-function formatBonafideClass(rawClass: string, lang: 'en' | 'mr' | 'hi'): string {
-  if (!rawClass) return lang === 'mr' ? '६ वी' : lang === 'hi' ? '६ वीं' : '6th';
+function formatBonafideClass(rawClass: string, lang: 'en' | 'mr'): string {
+  if (!rawClass) return lang === 'mr' ? '६ वी' : '6th';
   
   // Clean double suffixes e.g. "6th th B" -> "6th B"
   const clean = rawClass
@@ -41,15 +41,8 @@ function formatBonafideClass(rawClass: string, lang: 'en' | 'mr' | 'hi'): string
       6: '६ वी', 7: '७ वी', 8: '८ वी', 9: '९ वी', 10: '१० वी',
       11: '११ वी', 12: '१२ वी'
     };
-    const hiOrdinal: Record<number, string> = {
-      1: '१ वीं', 2: '२ वीं', 3: '३ वीं', 4: '४ वीं', 5: '५ वीं',
-      6: '६ वीं', 7: '७ वीं', 8: '८ वीं', 9: '९ वीं', 10: '१० वीं',
-      11: '११ वीं', 12: '१२ वीं'
-    };
 
-    const base = lang === 'hi' 
-      ? (hiOrdinal[num] || `${num} वीं`) 
-      : (mrOrdinal[num] || `${num} वी`);
+    const base = mrOrdinal[num] || `${num} वी`;
 
     if (division) {
       return `${base} (${division.toUpperCase()})`;
@@ -61,7 +54,7 @@ function formatBonafideClass(rawClass: string, lang: 'en' | 'mr' | 'hi'): string
 }
 
 // Format Caste for Bonafide
-function formatBonafideCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+function formatBonafideCaste(student: Student, lang: 'en' | 'mr'): string {
   if (lang === 'en') {
     const rawCaste = student.caste || student.casteLocal || 'SC';
     const clean = cleanEnglishText(rawCaste).replace(/[()[\]{}]/g, '').trim().toUpperCase();
@@ -69,15 +62,6 @@ function formatBonafideCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string
       return `${clean} - ${cleanEnglishText(student.subCaste).toUpperCase()}`;
     }
     return clean || 'SC';
-  }
-
-  if (lang === 'hi') {
-    const localized = getLocalizedCaste(student, 'hi');
-    const rawCaste = (student.caste || '').toUpperCase();
-    if (rawCaste.includes('SC') && !localized.includes('SC')) return `${localized} (SC)`;
-    if (rawCaste.includes('ST') && !localized.includes('ST')) return `${localized} (ST)`;
-    if (rawCaste.includes('OBC') && !localized.includes('OBC')) return `${localized} (OBC)`;
-    return localized;
   }
 
   // Marathi
@@ -107,14 +91,12 @@ export function BonafideCertificate({
 
   const defaultPurpose = currentLang === 'mr' 
     ? 'शैक्षणिक / शासकीय कामासाठी व शिष्यवृत्ती अर्जासाठी' 
-    : currentLang === 'hi' 
-    ? 'शैक्षणिक / शासकीय कार्य एवं छात्रवृत्ति आवेदन हेतु' 
     : 'Educational / Official Purposes & Scholarship Application';
 
   const finalPurpose = purpose || defaultPurpose;
 
   // Language Dictionary for the exact same Bonafide Proforma
-  const texts = {
+  const texts: Record<'en' | 'mr', any> = {
     en: {
       topHeader: 'BONAFIDE CERTIFICATE',
       schoolName: (settings.schoolName || 'SHRI SHIVAJI HIGH SCHOOL AND JUNIOR COLLEGE,').toUpperCase(),
@@ -170,34 +152,6 @@ export function BonafideCertificate({
       principal: 'मुख्याध्यापक / प्राचार्य',
       footerSchool: settings.schoolNameLocal || 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली',
       footerAddress: 'चिखली, जि. बुलढाणा - ४४३२०१'
-    },
-    hi: {
-      topHeader: 'बोनाफाइड प्रमाण पत्र',
-      schoolName: (settings.schoolNameLocal || 'श्री शिवाजी हाईस्कूल एवं जूनियर कॉलेज, चिखली'),
-      address: 'चिखली, जिला बुलढाणा - ४४३२०१',
-      udisePrefix: 'यू-डायस क्र.',
-      centerTitle: 'बोनाफाइड प्रमाण पत्र',
-      certifyPrefix: 'प्रमाणित किया जाता है कि,',
-      honorific: 'श्री / कु.',
-      regularStudentPrefix: 'इस विद्यालय के चालू शैक्षणिक सत्र',
-      sessionPrefix: '',
-      sessionInfix: 'में',
-      classPrefix: 'कक्षा',
-      classSuffix: 'के नियमित विद्यार्थी हैं/थे।',
-      recordStatement: 'उनकी मूल अंकसूची एवं विद्यालय छोड़ने का प्रमाण पत्र विद्यालय अभिलेख में जमा है।',
-      casteStatementPrefix: 'विद्यालय अभिलेख (विद्यालय छोड़ने के प्रमाण पत्र) के अनुसार उनकी जाति',
-      casteStatementSuffix: 'दर्ज है।',
-      dobStatementPrefix: 'विद्यालय अभिलेख के अनुसार उनकी जन्म तिथि (अंकों में)',
-      dobWordsPrefix: '(शब्दों में)',
-      grNoPrefix: 'जनरल रजिस्टर नं. (Gen. Reg. No.)',
-      placeLabel: 'स्थान:',
-      defaultPlace: 'चिखली',
-      dateLabel: 'दिनांक:',
-      refLabel: 'जावक क्र.:',
-      classTeacher: 'वर्ग शिक्षक',
-      principal: 'प्रधानाचार्य / प्राचार्य',
-      footerSchool: settings.schoolName || 'श्री शिवाजी हाईस्कूल एवं जूनियर कॉलेज',
-      footerAddress: 'चिखली, जिला बुलढाणा - ४४३२०१'
     }
   };
 

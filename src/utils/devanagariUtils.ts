@@ -266,19 +266,19 @@ const MOTHER_TONGUE_DICTIONARY: Record<string, { mr: string; hi: string }> = {
   'english': { mr: 'इंग्रजी', hi: 'अंग्रेजी' }
 };
 
-const CLASS_MAP: Record<string, { mr: string; hi: string; en: string }> = {
-  '1st': { mr: '१ ली', hi: '१ वीं', en: '1st' },
-  '2nd': { mr: '२ री', hi: '२ वीं', en: '2nd' },
-  '3rd': { mr: '३ री', hi: '३ वीं', en: '3rd' },
-  '4th': { mr: '४ थी', hi: '४ वीं', en: '4th' },
-  '5th': { mr: '५ वी', hi: '५ वीं', en: '5th' },
-  '6th': { mr: '६ वी', hi: '६ वीं', en: '6th' },
-  '7th': { mr: '७ वी', hi: '७ वीं', en: '7th' },
-  '8th': { mr: '८ वी', hi: '८ वीं', en: '8th' },
-  '9th': { mr: '९ वी', hi: '९ वीं', en: '9th' },
-  '10th': { mr: '१० वी', hi: '१० वीं', en: '10th' },
-  '11th': { mr: '११ वी', hi: '११ वीं', en: '11th' },
-  '12th': { mr: '१२ वी', hi: '१२ वीं', en: '12th' }
+const CLASS_MAP: Record<string, { mr: string; en: string }> = {
+  '1st': { mr: '१ ली', en: '1st' },
+  '2nd': { mr: '२ री', en: '2nd' },
+  '3rd': { mr: '३ री', en: '3rd' },
+  '4th': { mr: '४ थी', en: '4th' },
+  '5th': { mr: '५ वी', en: '5th' },
+  '6th': { mr: '६ वी', en: '6th' },
+  '7th': { mr: '७ वी', en: '7th' },
+  '8th': { mr: '८ वी', en: '8th' },
+  '9th': { mr: '९ वी', en: '9th' },
+  '10th': { mr: '१० वी', en: '10th' },
+  '11th': { mr: '११ वी', en: '11th' },
+  '12th': { mr: '१२ वी', en: '12th' }
 };
 
 /**
@@ -493,9 +493,8 @@ export function devanagariToLatin(devText: string): string {
 
   // Common Marathi surname / name mappings
   for (const [latin, obj] of Object.entries(NAME_DICTIONARY)) {
-    if (devText.includes(obj.mr) || devText.includes(obj.hi)) {
+    if (devText.includes(obj.mr)) {
       devText = devText.replace(new RegExp(obj.mr, 'g'), latin.charAt(0).toUpperCase() + latin.slice(1));
-      devText = devText.replace(new RegExp(obj.hi, 'g'), latin.charAt(0).toUpperCase() + latin.slice(1));
     }
   }
 
@@ -759,7 +758,7 @@ export function cleanDevanagariText(str: string): string {
  * e.g. "देशमुख आकांक्षा रमेश (DESHMUKH AKANKSHA RAMESH)" -> "देशमुख आकांक्षा रमेश" for mr/hi
  * or "DESHMUKH AKANKSHA RAMESH" for en.
  */
-export function extractCleanLanguageName(text: string, targetLang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function extractCleanLanguageName(text: string, targetLang: 'en' | 'mr' = 'mr'): string {
   if (!text) return '';
   const raw = text.trim();
 
@@ -977,19 +976,19 @@ function phoneticLatinToDevanagari(str: string): string {
 }
 
 // Full text translators for documents
-export function getLocalizedStudentName(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedStudentName(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (lang === 'en') {
     const raw = student.studentName || student.studentNameLocal || '';
     const clean = cleanEnglishText(raw);
     return deduplicateRepeatedPhrase(clean).replace(/[()[\]{}]/g, '').trim().toUpperCase();
   }
-  // Marathi / Hindi
+  // Marathi
   const raw = student.studentNameLocal || student.studentName || '';
   const clean = extractCleanLanguageName(raw, lang);
   return deduplicateRepeatedPhrase(clean).replace(/[()[\]{}]/g, '').trim();
 }
 
-export function getLocalizedFatherName(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedFatherName(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.fatherName && !student.fatherNameLocal) return '-';
   if (lang === 'en') {
     const raw = student.fatherName || student.fatherNameLocal || '';
@@ -1001,7 +1000,7 @@ export function getLocalizedFatherName(student: Student, lang: 'en' | 'mr' | 'hi
   return deduplicateRepeatedPhrase(clean).replace(/[()[\]{}]/g, '').trim();
 }
 
-export function getLocalizedMotherName(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedMotherName(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.motherName && !student.motherNameLocal) return '-';
   if (lang === 'en') {
     const raw = student.motherName || student.motherNameLocal || '';
@@ -1013,7 +1012,7 @@ export function getLocalizedMotherName(student: Student, lang: 'en' | 'mr' | 'hi
   return deduplicateRepeatedPhrase(clean).replace(/[()[\]{}]/g, '').trim();
 }
 
-export function getLocalizedBirthPlace(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedBirthPlace(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.birthPlace) return '-';
   if (lang === 'en') {
     return cleanEnglishText(student.birthPlace);
@@ -1025,37 +1024,37 @@ export function getLocalizedBirthPlace(student: Student, lang: 'en' | 'mr' | 'hi
   const localized = parts.map(part => {
     const low = part.toLowerCase().trim();
     if (LOCATION_DICTIONARY[low]) {
-      return lang === 'hi' ? LOCATION_DICTIONARY[low].hi : LOCATION_DICTIONARY[low].mr;
+      return LOCATION_DICTIONARY[low].mr;
     }
     return transliterateToDevanagari(part);
   });
   return localized.join(', ');
 }
 
-export function getLocalizedNationality(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedNationality(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (lang === 'en') {
     return cleanEnglishText(student.nationality) || 'Indian';
   }
   const low = (student.nationality || 'Indian').toLowerCase().trim();
   if (NATIONALITY_DICTIONARY[low]) {
-    return lang === 'hi' ? NATIONALITY_DICTIONARY[low].hi : NATIONALITY_DICTIONARY[low].mr;
+    return NATIONALITY_DICTIONARY[low].mr;
   }
-  return lang === 'mr' ? 'भारतीय' : lang === 'hi' ? 'भारतीय' : 'Indian';
+  return 'भारतीय';
 }
 
-export function getLocalizedMotherTongue(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedMotherTongue(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (lang === 'en') {
     return cleanEnglishText(student.motherTongue) || 'Marathi';
   }
   const low = (student.motherTongue || 'Marathi').toLowerCase().trim();
   if (MOTHER_TONGUE_DICTIONARY[low]) {
-    return lang === 'hi' ? MOTHER_TONGUE_DICTIONARY[low].hi : MOTHER_TONGUE_DICTIONARY[low].mr;
+    return MOTHER_TONGUE_DICTIONARY[low].mr;
   }
   return transliterateToDevanagari(student.motherTongue || 'Marathi');
 }
 
-export function getLocalizedReligion(student: Student, lang: 'en' | 'mr' | 'hi'): string {
-  if (!student.religion) return lang === 'mr' ? 'हिंदू' : lang === 'hi' ? 'हिन्दू' : 'Hindu';
+export function getLocalizedReligion(student: Student, lang: 'en' | 'mr' = 'mr'): string {
+  if (!student.religion) return lang === 'mr' ? 'हिंदू' : 'Hindu';
   if (lang === 'en') {
     return cleanEnglishText(student.religion) || 'Hindu';
   }
@@ -1064,12 +1063,12 @@ export function getLocalizedReligion(student: Student, lang: 'en' | 'mr' | 'hi')
   const clean = cleanEnglishText(student.religion);
   const low = clean.toLowerCase().trim();
   if (RELIGION_DICTIONARY[low]) {
-    return lang === 'hi' ? RELIGION_DICTIONARY[low].hi : RELIGION_DICTIONARY[low].mr;
+    return RELIGION_DICTIONARY[low].mr;
   }
   return transliterateToDevanagari(student.religion);
 }
 
-export function getLocalizedCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedCaste(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.caste) return '-';
   if (lang === 'en') {
     return cleanEnglishText(student.caste);
@@ -1079,12 +1078,12 @@ export function getLocalizedCaste(student: Student, lang: 'en' | 'mr' | 'hi'): s
   const clean = cleanEnglishText(student.caste);
   const low = clean.toLowerCase().trim();
   if (CASTE_DICTIONARY[low]) {
-    return lang === 'hi' ? CASTE_DICTIONARY[low].hi : CASTE_DICTIONARY[low].mr;
+    return CASTE_DICTIONARY[low].mr;
   }
   return transliterateToDevanagari(student.caste);
 }
 
-export function getLocalizedSubCaste(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedSubCaste(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.subCaste || student.subCaste === '-') return '-';
   if (lang === 'en') {
     return cleanEnglishText(student.subCaste);
@@ -1094,14 +1093,14 @@ export function getLocalizedSubCaste(student: Student, lang: 'en' | 'mr' | 'hi')
   const clean = cleanEnglishText(student.subCaste);
   const low = clean.toLowerCase().trim();
   if (CASTE_DICTIONARY[low]) {
-    return lang === 'hi' ? CASTE_DICTIONARY[low].hi : CASTE_DICTIONARY[low].mr;
+    return CASTE_DICTIONARY[low].mr;
   }
   return transliterateToDevanagari(student.subCaste);
 }
 
-export function getLocalizedPreviousSchool(student: Student, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedPreviousSchool(student: Student, lang: 'en' | 'mr' = 'mr'): string {
   if (!student.previousSchool) {
-    return lang === 'mr' ? 'थेट प्रवेश / नवीन प्रवेश' : lang === 'hi' ? 'सीधा प्रवेश' : 'Direct Admission';
+    return lang === 'mr' ? 'थेट प्रवेश / नवीन प्रवेश' : 'Direct Admission';
   }
   if (lang === 'en') {
     return cleanEnglishText(student.previousSchool);
@@ -1112,28 +1111,28 @@ export function getLocalizedPreviousSchool(student: Student, lang: 'en' | 'mr' |
   
   // Specific known schools
   if (raw.includes('Adarsh High School')) {
-    return lang === 'mr' ? 'आदर्श हायस्कूल, कोथरूड, पुणे' : 'आदर्श हाई स्कूल, कोथरुड, पुणे';
+    return 'आदर्श हायस्कूल, कोथरूड, पुणे';
   }
   if (raw.includes('Chatrapati Shahu Vidyalaya')) {
-    return lang === 'mr' ? 'छत्रपती शाहू विद्यालय, कोल्हापूर' : 'छत्रपति शाहू विद्यालय, कोल्हापुर';
+    return 'छत्रपती शाहू विद्यालय, कोल्हापूर';
   }
   if (raw.includes('Saraswati Bal Mandir')) {
-    return lang === 'mr' ? 'सरस्वती बाल मंदिर, नाशिक' : 'सरस्वती बाल मंदिर, नासिक';
+    return 'सरस्वती बाल मंदिर, नाशिक';
   }
   if (raw.includes('Zilla Parishad Primary School') || raw.includes('Z. P. Primary School')) {
-    return lang === 'mr' ? 'जिल्हा परिषद प्राथमिक शाळा, सातारा' : 'जिला परिषद प्राथमिक विद्यालय, सतारा';
+    return 'जिल्हा परिषद प्राथमिक शाळा, सातारा';
   }
   if (raw.includes('National English Medium School')) {
-    return lang === 'mr' ? 'नॅशनल इंग्लिश मीडियम स्कूल, पुणे' : 'नेशनल इंग्लिश मीडियम स्कूल, पुणे';
+    return 'नॅशनल इंग्लिश मीडियम स्कूल, पुणे';
   }
   if (raw.includes('New English School')) {
-    return lang === 'mr' ? 'न्यू इंग्लिश स्कूल, सोलापूर' : 'न्यू इंग्लिश स्कूल, सोलापुर';
+    return 'न्यू इंग्लिश स्कूल, सोलापूर';
   }
 
   return transliterateToDevanagari(raw);
 }
 
-export function getLocalizedClass(cls: AdmissionClass | string, lang: 'en' | 'mr' | 'hi'): string {
+export function getLocalizedClass(cls: AdmissionClass | string, lang: 'en' | 'mr' = 'mr'): string {
   const match = CLASS_MAP[cls];
   if (match) {
     return match[lang] || match.en;
@@ -1141,8 +1140,8 @@ export function getLocalizedClass(cls: AdmissionClass | string, lang: 'en' | 'mr
   return cls;
 }
 
-export function getLocalizedProgress(progress?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
-  if (!progress) return lang === 'mr' ? 'समाधानकारक / उत्तम' : lang === 'hi' ? 'संतोषजनक / उत्तम' : 'Good & Satisfactory';
+export function getLocalizedProgress(progress?: string, lang: 'en' | 'mr' = 'mr'): string {
+  if (!progress) return lang === 'mr' ? 'समाधानकारक / उत्तम' : 'Good & Satisfactory';
   if (lang === 'en') {
     return cleanEnglishText(progress);
   }
@@ -1150,28 +1149,28 @@ export function getLocalizedProgress(progress?: string, lang: 'en' | 'mr' | 'hi'
   const clean = cleanEnglishText(progress);
   const low = clean.toLowerCase().trim();
   if (low.includes('excellent') && low.includes('a+')) {
-    return lang === 'mr' ? 'उत्कृष्ट (अ+ श्रेणी)' : 'उत्कृष्ट (ए+ ग्रेड)';
+    return 'उत्कृष्ट (अ+ श्रेणी)';
   }
   if (low.includes('excellent') || low.includes('outstanding')) {
-    return lang === 'mr' ? 'उत्कृष्ट' : 'उत्कृष्ट';
+    return 'उत्कृष्ट';
   }
   if (low.includes('first class')) {
-    return lang === 'mr' ? 'प्रथम श्रेणी' : 'प्रथम श्रेणी';
+    return 'प्रथम श्रेणी';
   }
   if (low.includes('distinction')) {
-    return lang === 'mr' ? 'विशेष प्राविण्य' : 'विशेष योग्यता';
+    return 'विशेष प्राविण्य';
   }
   if (low.includes('satisfactory')) {
-    return lang === 'mr' ? 'समाधानकारक' : 'संतोषजनक';
+    return 'समाधानकारक';
   }
   if (low.includes('good')) {
-    return lang === 'mr' ? 'उत्तम' : 'उत्तम';
+    return 'उत्तम';
   }
-  return lang === 'mr' ? 'उत्तम व समाधानकारक' : 'उत्तम एवं संतोषजनक';
+  return 'उत्तम व समाधानकारक';
 }
 
-export function getLocalizedBehaviour(behaviour?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
-  if (!behaviour) return lang === 'mr' ? 'उत्तम व आज्ञाधारक' : lang === 'hi' ? 'उत्तम एवं आज्ञाकारी' : 'Good & Obedient';
+export function getLocalizedBehaviour(behaviour?: string, lang: 'en' | 'mr' = 'mr'): string {
+  if (!behaviour) return lang === 'mr' ? 'उत्तम व आज्ञाधारक' : 'Good & Obedient';
   if (lang === 'en') {
     return cleanEnglishText(behaviour);
   }
@@ -1179,32 +1178,32 @@ export function getLocalizedBehaviour(behaviour?: string, lang: 'en' | 'mr' | 'h
   const clean = cleanEnglishText(behaviour);
   const low = clean.toLowerCase().trim();
   if (low.includes('cooperative')) {
-    return lang === 'mr' ? 'उत्कृष्ट व सहकार्यशील' : 'अति उत्तम एवं सहयोगी';
+    return 'उत्कृष्ट व सहकार्यशील';
   }
   if (low.includes('disciplined')) {
-    return lang === 'mr' ? 'उत्तम व शिस्तबद्ध' : 'उत्तम एवं अनुशासित';
+    return 'उत्तम व शिस्तबद्ध';
   }
   if (low.includes('exemplary')) {
-    return lang === 'mr' ? 'अनुकरणीय' : 'अनुकरणीय';
+    return 'अनुकरणीय';
   }
   if (low.includes('well behaved')) {
-    return lang === 'mr' ? 'सद्वर्तनी व आज्ञाधारक' : 'सदाचारी एवं आज्ञाकारी';
+    return 'सद्वर्तनी व आज्ञाधारक';
   }
   if (low.includes('punctual')) {
-    return lang === 'mr' ? 'वेळेचे पालन करणारा' : 'समयनिष्ठ';
+    return 'वेळेचे पालन करणारा';
   }
   if (low.includes('obedient')) {
-    return lang === 'mr' ? 'उत्तम व आज्ञाधारक' : 'उत्तम एवं आज्ञाकारी';
+    return 'उत्तम व आज्ञाधारक';
   }
   if (low.includes('good')) {
-    return lang === 'mr' ? 'उत्तम' : 'उत्तम';
+    return 'उत्तम';
   }
-  return lang === 'mr' ? 'उत्तम' : 'उत्तम';
+  return 'उत्तम';
 }
 
-export function getLocalizedLeavingReason(reason?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function getLocalizedLeavingReason(reason?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (!reason) {
-    return lang === 'mr' ? 'पालकांची बदली / अभ्यासक्रम पूर्ण' : lang === 'hi' ? 'अभिभावक का स्थानांतरण / पाठ्यक्रम पूर्ण' : 'Parent Transfer / Completed Course';
+    return lang === 'mr' ? 'पालकांची बदली / अभ्यासक्रम पूर्ण' : 'Parent Transfer / Completed Course';
   }
   if (lang === 'en') {
     return cleanEnglishText(reason);
@@ -1213,67 +1212,63 @@ export function getLocalizedLeavingReason(reason?: string, lang: 'en' | 'mr' | '
   const clean = cleanEnglishText(reason);
   const low = clean.toLowerCase().trim();
   if (low.includes('transfer')) {
-    return lang === 'mr' ? 'पालकांची बदली' : 'अभिभावक का स्थानांतरण';
+    return 'पालकांची बदली';
   }
   if (low.includes('higher education') || low.includes('higher studies')) {
-    return lang === 'mr' ? 'पुढील उच्च शिक्षणासाठी' : 'उच्च शिक्षा हेतु';
+    return 'पुढील उच्च शिक्षणासाठी';
   }
   if (low.includes('completed')) {
-    return lang === 'mr' ? 'अभ्यासक्रम पूर्ण झाल्यामुळे' : 'पाठ्यक्रम पूर्ण होने पर';
+    return 'अभ्यासक्रम पूर्ण झाल्यामुळे';
   }
   if (low.includes('passed 10th')) {
-    return lang === 'mr' ? 'इयत्ता १० वी उत्तीर्ण होऊन शाळा सोडली' : 'कक्षा १०वीं उत्तीर्ण';
+    return 'इयत्ता १० वी उत्तीर्ण होऊन शाळा सोडली';
   }
   if (low.includes('passed 12th')) {
-    return lang === 'mr' ? 'इयत्ता १२ वी उत्तीर्ण होऊन शाळा सोडली' : 'कक्षा १२वीं उत्तीर्ण';
+    return 'इयत्ता १२ वी उत्तीर्ण होऊन शाळा सोडली';
   }
   if (low.includes('parent request')) {
-    return lang === 'mr' ? 'पालकांच्या विनंतीनुसार' : 'अभिभावक के अनुरोध पर';
+    return 'पालकांच्या विनंतीनुसार';
   }
   return transliterateToDevanagari(reason);
 }
 
-export function getLocalizedBoard(boardName?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
-  if (!boardName) return lang === 'mr' ? 'अमरावती' : lang === 'hi' ? 'अमरावती' : 'Amravati';
+export function getLocalizedBoard(boardName?: string, lang: 'en' | 'mr' = 'mr'): string {
+  if (!boardName) return lang === 'mr' ? 'अमरावती' : 'Amravati';
   if (lang === 'en') {
     return cleanEnglishText(boardName);
   }
   const clean = cleanEnglishText(boardName);
   const low = clean.toLowerCase().trim();
   if (BOARD_DICTIONARY[low]) {
-    return lang === 'hi' ? BOARD_DICTIONARY[low].hi : BOARD_DICTIONARY[low].mr;
+    return BOARD_DICTIONARY[low].mr;
   }
   return transliterateToDevanagari(boardName);
 }
 
-export function getLocalizedAddress(address?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function getLocalizedAddress(address?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (!address) return '';
   if (lang === 'en') {
     return cleanEnglishText(address);
   }
 
   if (address.includes('At Post Chikhli') || address.includes('Chikhli, Dist. Buldhana')) {
-    return lang === 'mr' 
-      ? 'मु. पो. चिखली, जि. बुलढाणा, महाराष्ट्र - ४४३२०१' 
-      : 'मु. पो. चिखली, जिला बुलढाणा, महाराष्ट्र - ४४३२०१';
+    return 'मु. पो. चिखली, जि. बुलढाणा, महाराष्ट्र - ४४३२०१';
   }
 
   let text = address;
-  text = text.replace(/At Post|A\/P|At & Post/gi, lang === 'mr' ? 'मु. पो.' : 'मु. पो.');
-  text = text.replace(/Dist\.?|District/gi, lang === 'mr' ? 'जि.' : 'जिला');
-  text = text.replace(/Tal\.?|Taluka/gi, lang === 'mr' ? 'ता.' : 'तहसील');
+  text = text.replace(/At Post|A\/P|At & Post/gi, 'मु. पो.');
+  text = text.replace(/Dist\.?|District/gi, 'जि.');
+  text = text.replace(/Tal\.?|Taluka/gi, 'ता.');
   text = text.replace(/Maharashtra/gi, 'महाराष्ट्र');
   text = text.replace(/India/gi, 'भारत');
 
   return transliterateToDevanagari(text);
 }
 
-export function getLocalizedRecognitionNo(recNo?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function getLocalizedRecognitionNo(recNo?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (!recNo) {
     return lang === 'mr' 
       ? 'क्र. व. दि. बु. जि. प. / माध्यमिक शाळा / तपासणी १११५० शिक्षण विभाग बुलढाणा, दि. १८/१०/१९६५'
-      : lang === 'hi'
-      ? 'क्र. व. दि. बु. जि. प. / माध्यमिक विद्यालय / निरीक्षण १११५० शिक्षा विभाग बुलढाणा, दि. १८/१०/१९६५'
       : 'Kr. Va Di. Bu. Ji. Pa. / Secondary School / Inspection 11150 Education Department Buldhana, Dt. 18/10/65';
   }
   if (lang === 'en') {
@@ -1281,25 +1276,20 @@ export function getLocalizedRecognitionNo(recNo?: string, lang: 'en' | 'mr' | 'h
   }
   
   if (recNo.includes('Kr. Va Di. Bu. Ji. Pa.') || recNo.includes('Education Department Buldhana')) {
-    return lang === 'mr' 
-      ? 'क्र. व. दि. बु. जि. प. / माध्यमिक शाळा / तपासणी १११५० शिक्षण विभाग बुलढाणा, दि. १८/१०/१९६५'
-      : 'क्र. व. दि. बु. जि. प. / माध्यमिक विद्यालय / निरीक्षण १११५० शिक्षा विभाग बुलढाणा, दि. १८/१०/१९६५';
+    return 'क्र. व. दि. बु. जि. प. / माध्यमिक शाळा / तपासणी १११५० शिक्षण विभाग बुलढाणा, दि. १८/१०/१९६५';
   }
 
   return transliterateToDevanagari(recNo);
 }
 
-export function getLocalizedSansthaName(sansthaAffiliation?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function getLocalizedSansthaName(sansthaAffiliation?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (lang === 'en') {
     return cleanEnglishText(sansthaAffiliation) || 'Shri Shivaji Shikshan Sanstha, Amravati – Managed by';
   }
-  if (lang === 'mr' || lang === 'hi') {
-    return 'श्री शिवाजी शिक्षण संस्था, अमरावती द्वारा संचालित';
-  }
-  return sansthaAffiliation || 'Shri Shivaji Shikshan Sanstha, Amravati – Managed by';
+  return 'श्री शिवाजी शिक्षण संस्था, अमरावती द्वारा संचालित';
 }
 
-export function cleanAndLocalizePlace(val?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function cleanAndLocalizePlace(val?: string, lang: 'en' | 'mr' = 'mr'): string {
   if (!val) {
     return lang === 'en' ? 'At Post Chikhli' : 'मु. पो. चिखली';
   }
@@ -1314,7 +1304,7 @@ export function cleanAndLocalizePlace(val?: string, lang: 'en' | 'mr' | 'hi' = '
     return cleanEnglishText(s).trim() || 'At Post Chikhli';
   }
 
-  // Marathi / Hindi
+  // Marathi
   let s = val.trim();
 
   // Explicit match for At Post Chikhli variations
@@ -1329,7 +1319,7 @@ export function cleanAndLocalizePlace(val?: string, lang: 'en' | 'mr' | 'hi' = '
   s = s.replace(/\bAt\s*&\s*Post\b|\bAt\s+Post\b|\bA\/P\b|\bA\.\s*P\.\b/gi, 'मु. पो.');
   s = s.replace(/\bPost\b/gi, 'पो.');
   s = s.replace(/\bTaluka\b|\bTal\b\.?/gi, 'ता.');
-  s = s.replace(/\bDistrict\b|\bDist\b\.?/gi, lang === 'hi' ? 'जिला' : 'जि.');
+  s = s.replace(/\bDistrict\b|\bDist\b\.?/gi, 'जि.');
   s = s.replace(/\bChikhli\b/gi, 'चिखली');
   s = s.replace(/\bBuldhana\b|\bBuldana\b/gi, 'बुलढाणा');
   s = s.replace(/\bMehkar\b/gi, 'मेहकर');
@@ -1353,7 +1343,7 @@ export function cleanAndLocalizePlace(val?: string, lang: 'en' | 'mr' | 'hi' = '
   return s.trim();
 }
 
-export function cleanAndLocalizeTaluka(val?: string, lang: 'en' | 'mr' | 'hi' = 'mr'): string {
+export function cleanAndLocalizeTaluka(val?: string, lang: 'en' | 'mr' = 'mr'): string {
   const localized = cleanAndLocalizePlace(val, lang);
   if (lang === 'en') {
     return localized.replace(/^At\s+Post\s+/i, '').replace(/,\s*Dist.*$/i, '').trim() || 'Chikhli';

@@ -237,10 +237,12 @@ export function Settings() {
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
             <School className="w-6 h-6 text-blue-700" />
-            <span>School Configuration & Settings</span>
+            <span>{language === 'mr' ? 'शाळा कॉन्फिगरेशन व सेटिंग्ज' : 'School Configuration & Settings'}</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Configure school profile, header branding, and manage database synchronization.
+            {language === 'mr' 
+              ? 'शाळेचे तपशील, लेटरहेड माहिती आणि डेटाबेस व्यवस्थापन.' 
+              : 'Configure school profile, header branding, and manage database synchronization.'}
           </p>
         </div>
 
@@ -258,7 +260,7 @@ export function Settings() {
           <div className="bg-slate-900 text-white px-6 py-3.5 flex items-center gap-2">
             <School className="w-5 h-5 text-blue-400" />
             <h3 className="text-sm font-bold tracking-wide uppercase">
-              School Profile & Letterhead Details
+              {language === 'mr' ? 'शाळेची प्रोफाइल व लेटरहेड तपशील' : 'School Profile & Letterhead Details'}
             </h3>
           </div>
 
@@ -266,7 +268,7 @@ export function Settings() {
             {/* School Name (English) */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                School / Institution Full Name (English) <span className="text-red-500">*</span>
+                {language === 'mr' ? 'शाळेचे संपूर्ण नाव (इंग्रजीत)' : 'School / Institution Full Name (English)'} <span className="text-red-500">*</span>
               </label>
               <input
                 id="input-setting-school-name"
@@ -282,7 +284,7 @@ export function Settings() {
             {/* School Name (Marathi / Regional) */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                School Name in Local Language (मराठी / हिंदी)
+                {language === 'mr' ? 'शाळेचे नाव (मराठीत - संकेतस्थळावर सर्वत्र दाखवण्यासाठी)' : 'School Name in Local Language (मराठी / हिंदी)'}
               </label>
               <input
                 id="input-setting-school-name-local"
@@ -297,7 +299,7 @@ export function Settings() {
             {/* UDISE Number */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                School UDISE Code (11 Digits) <span className="text-red-500">*</span>
+                {language === 'mr' ? 'शाळेचा युडायस कोड (11 अंकी)' : 'School UDISE Code (11 Digits)'} <span className="text-red-500">*</span>
               </label>
               <input
                 id="input-setting-udise"
@@ -313,7 +315,7 @@ export function Settings() {
             {/* Academic Year */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Current Academic Year <span className="text-red-500">*</span>
+                {language === 'mr' ? 'चालू शैक्षणिक वर्ष' : 'Current Academic Year'} <span className="text-red-500">*</span>
               </label>
               <input
                 id="input-setting-academic-year"
@@ -329,7 +331,7 @@ export function Settings() {
             {/* Board Affiliation */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Management / Sanstha
+                {language === 'mr' ? 'संस्था / व्यवस्थापन मंडळ' : 'Management / Sanstha'}
               </label>
               <input
                 id="input-setting-affiliation"
@@ -344,7 +346,7 @@ export function Settings() {
             {/* School Recognition No */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                School Recognition No. (शाळा मान्यता क्र.)
+                {language === 'mr' ? 'शाळा मान्यता / नोंदणी क्र.' : 'School Recognition No. (शाळा मान्यता क्र.)'}
               </label>
               <input
                 id="input-setting-recognition"
@@ -359,7 +361,7 @@ export function Settings() {
             {/* Board & Affiliation */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Board Name (मंडळ)
+                {language === 'mr' ? 'शिक्षण मंडळ (Board Name)' : 'Board Name (मंडळ)'}
               </label>
               <input
                 id="input-setting-board"
@@ -373,7 +375,7 @@ export function Settings() {
 
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Affiliation No. (संलग्नता क्र.)
+                {language === 'mr' ? 'संलग्नता / इंडेक्स क्र.' : 'Affiliation No. (संलग्नता क्र.)'}
               </label>
               <input
                 id="input-setting-affiliation-no"
@@ -388,7 +390,7 @@ export function Settings() {
             {/* Headmaster / Principal Name */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Headmaster / Principal Name & Degree <span className="text-red-500">*</span>
+                {language === 'mr' ? 'मुख्याध्यापक / प्राचार्यांचे नाव व पदवी' : 'Headmaster / Principal Name & Degree'} <span className="text-red-500">*</span>
               </label>
               <input
                 id="input-setting-headmaster"
@@ -404,7 +406,7 @@ export function Settings() {
             {/* Address */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                School Postal Address
+                {language === 'mr' ? 'शाळेचा संपूर्ण पत्ता' : 'School Postal Address'}
               </label>
               <input
                 id="input-setting-address"
@@ -419,7 +421,7 @@ export function Settings() {
             {/* Contact Phone */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Office Phone / Mobile
+                {language === 'mr' ? 'शाळेचा फोन / मोबाईल' : 'Office Phone / Mobile'}
               </label>
               <input
                 id="input-setting-phone"
@@ -434,7 +436,7 @@ export function Settings() {
             {/* Official Email */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Office Email
+                {language === 'mr' ? 'शाळेचा अधिकृत ईमेल' : 'Office Email'}
               </label>
               <input
                 id="input-setting-email"
@@ -457,7 +459,7 @@ export function Settings() {
             className="px-6 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-bold text-sm shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <Save className="w-4 h-4" />
-            <span>{saving ? 'Saving...' : 'Save School Settings'}</span>
+            <span>{saving ? (language === 'mr' ? 'जतन करत आहे...' : 'Saving...') : (language === 'mr' ? 'माहिती सेव्ह करा' : 'Save School Settings')}</span>
           </button>
         </div>
       </form>

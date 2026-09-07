@@ -162,7 +162,7 @@ function parseAnyDateToISO(val: any, fallbackYear = 2025): string {
 /**
  * Normalizes class text into standard AdmissionClass (e.g. '1 ली', '1st', '१० वी', '10th')
  */
-function normalizeClass(raw: string): AdmissionClass {
+export function normalizeClass(raw: string): AdmissionClass {
   if (!raw) return '1st';
   const clean = raw.toLowerCase().trim();
   

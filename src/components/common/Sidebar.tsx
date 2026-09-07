@@ -22,7 +22,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -54,9 +54,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       icon: FileText,
       id: 'nav-documents',
       subLinks: [
-        { to: '/documents/tc', label: 'T.C. (Transfer Certificate)' },
-        { to: '/documents/bonafide', label: 'Bonafide Certificate' },
-        { to: '/documents/nirgam-utara', label: 'Nirgam Utara (Register Extract)' }
+        { to: '/documents/tc', label: language === 'mr' ? 'शाळा सोडल्याचा दाखला (T.C.)' : 'T.C. (Transfer Certificate)' },
+        { to: '/documents/bonafide', label: language === 'mr' ? 'बोनाफाईड प्रमाणपत्र (Bonafide)' : 'Bonafide Certificate' },
+        { to: '/documents/nirgam-utara', label: language === 'mr' ? 'निर्गम उतारा (जनरल रजिस्टर उतारा)' : 'Nirgam Utara (Register Extract)' }
       ]
     },
     {
@@ -100,14 +100,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 ShalaVerse
               </h2>
               <p className="text-[10px] text-blue-400 font-medium tracking-wide uppercase">
-                Admission & Register
+                {language === 'mr' ? 'प्रवेश व जनरल रजिस्टर' : 'Admission & Register'}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg lg:hidden"
+            className="p-1.5 text-slate-400 hover:text-white rounded-lg lg:hidden cursor-pointer"
             aria-label="Close menu"
           >
             <X className="w-5 h-5" />
@@ -116,10 +116,12 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         {/* School Snapshot Pill */}
         <div className="px-4 py-3 mx-3 my-2 rounded-lg bg-slate-800/60 border border-slate-700/60">
-          <p className="text-xs font-semibold text-slate-200 truncate">{settings.schoolName}</p>
+          <p className="text-xs font-semibold text-slate-200 truncate">
+            {language === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName}
+          </p>
           <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-            <span>UDISE: {settings.udiseNumber}</span>
-            <span className="text-emerald-400 font-bold">Online</span>
+            <span>{language === 'mr' ? 'युडायस' : 'UDISE'}: {settings.udiseNumber}</span>
+            <span className="text-emerald-400 font-bold">{language === 'mr' ? 'सक्रिय' : 'Online'}</span>
           </div>
         </div>
 
@@ -165,7 +167,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               ShalaVerse ERP v2.6.0
             </p>
             <p className="text-[9px] text-slate-400">
-              Maharashtra School Board Standard
+              {language === 'mr' ? 'महाराष्ट्र शासन शालेय शिक्षण विभाग प्रमाण' : 'Maharashtra School Board Standard'}
             </p>
           </div>
         </div>

@@ -29,9 +29,13 @@ import { exportStudentsToCSV } from '../utils/exportUtils';
 import { CLASS_OPTIONS } from '../components/students/StudentFilter';
 
 export function Dashboard() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
+
+  const schoolName = language === 'mr' 
+    ? (settings.schoolNameLocal || settings.schoolName)
+    : settings.schoolName;
 
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +86,7 @@ export function Dashboard() {
   // Class strength distribution
   const classCounts: Record<string, number> = {};
   students.forEach(s => {
-    const cls = s.admissionClass || 'Other';
+    const cls = s.admissionClass || '5th';
     classCounts[cls] = (classCounts[cls] || 0) + 1;
   });
 
@@ -139,13 +143,13 @@ export function Dashboard() {
           <div className="space-y-2 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/30 text-xs font-semibold">
               <School className="w-3.5 h-3.5" />
-              <span>General Register (GR) Central Portal</span>
+              <span>{language === 'mr' ? 'जनरल रजिस्टर (GR) मध्यवर्ती पोर्टल' : 'General Register (GR) Central Portal'}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
-              {settings.schoolName}
+              {schoolName}
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 font-normal leading-relaxed">
-              UDISE Code: <strong className="text-white font-mono">{settings.udiseNumber}</strong> • Academic Year: <strong className="text-blue-300">{currentAcademicYear}</strong>
+              {language === 'mr' ? 'युडायस कोड' : 'UDISE Code'}: <strong className="text-white font-mono">{settings.udiseNumber}</strong> • {language === 'mr' ? 'शैक्षणिक वर्ष' : 'Academic Year'}: <strong className="text-blue-300">{currentAcademicYear}</strong>
             </p>
           </div>
 
@@ -155,7 +159,7 @@ export function Dashboard() {
               id="btn-dash-add-student"
               type="button"
               onClick={() => navigate('/add-student')}
-              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-md flex items-center gap-2 transition"
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-xl shadow-md flex items-center gap-2 transition cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
               <span>{t('addStudent')}</span>
@@ -165,7 +169,7 @@ export function Dashboard() {
               id="btn-dash-export-csv"
               type="button"
               onClick={() => exportStudentsToCSV(students)}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition"
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-sm font-semibold rounded-xl border border-slate-700 flex items-center gap-2 transition cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span>{t('exportExcel')}</span>
@@ -179,7 +183,7 @@ export function Dashboard() {
         <StatCard
           title={t('totalStudents')}
           value={totalStudents}
-          subtitle="Registered in General Book"
+          subtitle={language === 'mr' ? 'जनरल रजिस्टरमध्ये नोंदणीकृत' : 'Registered in General Book'}
           icon={<Users className="w-6 h-6" />}
           color="blue"
           onClick={() => navigate('/students')}
@@ -187,14 +191,14 @@ export function Dashboard() {
         <StatCard
           title={t('currentYearStudents')}
           value={currentYearStudents}
-          subtitle={`Enrolled for ${currentAcademicYear}`}
+          subtitle={language === 'mr' ? `चालू वर्ष ${currentAcademicYear} चे प्रवेश` : `Enrolled for ${currentAcademicYear}`}
           icon={<GraduationCap className="w-6 h-6" />}
           color="emerald"
         />
         <StatCard
-          title="Documents Issued"
+          title={language === 'mr' ? 'वितरित केलेले दाखले' : 'Documents Issued'}
           value={docLogsCount}
-          subtitle="T.C. & Bonafide Issued"
+          subtitle={language === 'mr' ? 'T.C., बोनाफाईड व निर्गम उतारे' : 'T.C. & Bonafide Issued'}
           icon={<FileText className="w-6 h-6" />}
           color="purple"
           onClick={() => navigate('/documents')}
@@ -202,7 +206,7 @@ export function Dashboard() {
         <StatCard
           title={t('activeClasses')}
           value={Object.keys(classCounts).length}
-          subtitle="Classes 1st to 12th"
+          subtitle={language === 'mr' ? 'इयत्ता ५ वी ते १२ वी' : 'Classes 5th to 12th'}
           icon={<School className="w-6 h-6" />}
           color="amber"
           onClick={() => navigate('/reports')}
@@ -215,18 +219,20 @@ export function Dashboard() {
           <div>
             <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
               <Award className="w-5 h-5 text-blue-700" />
-              <span>Official Document Generation Hub</span>
+              <span>{language === 'mr' ? 'अधिकृत दाखले व प्रमाणपत्र केंद्र' : 'Official Document Generation Hub'}</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Instantly generate, fill, preview and print verified certificates for any student
+              {language === 'mr' 
+                ? 'कोणत्याही विद्यार्थ्याचा दाखला तत्काळ तयार करा, तपासा व प्रिंट करा' 
+                : 'Instantly generate, fill, preview and print verified certificates for any student'}
             </p>
           </div>
           <button
             type="button"
             onClick={() => navigate('/documents')}
-            className="text-xs font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1"
+            className="text-xs font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
           >
-            <span>View All Documents</span>
+            <span>{language === 'mr' ? 'सर्व दाखले पहा' : 'View All Documents'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -243,13 +249,15 @@ export function Dashboard() {
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-700">
-                  Transfer Certificate (T.C.)
+                  {language === 'mr' ? 'शाळा सोडल्याचा दाखला (T.C.)' : 'Transfer Certificate (T.C.)'}
                 </h4>
-                <p className="text-[11px] text-slate-500">शाळा सोडल्याचा दाखला</p>
+                <p className="text-[11px] text-slate-500">{language === 'mr' ? 'School Leaving Certificate' : 'शाळा सोडल्याचा दाखला'}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-              Standard 16-point official format with birth date in words, conduct, progress, and signatures.
+              {language === 'mr'
+                ? 'जन्मदिनांक अक्षरी, वर्तणूक, अभ्यास प्रगती व स्वाक्षरीसह अधिकृत १६ मुद्द्यांचे प्रमाणपत्र.'
+                : 'Standard 16-point official format with birth date in words, conduct, progress, and signatures.'}
             </p>
           </div>
 
@@ -264,13 +272,15 @@ export function Dashboard() {
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700">
-                  Bonafide Certificate
+                  {language === 'mr' ? 'बोनाफाईड प्रमाणपत्र' : 'Bonafide Certificate'}
                 </h4>
-                <p className="text-[11px] text-slate-500">बोनाफाईड प्रमाणपत्र</p>
+                <p className="text-[11px] text-slate-500">{language === 'mr' ? 'Bonafide Certificate' : 'बोनाफाईड प्रमाणपत्र'}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-              Official bonafide certification with student photo attestation box and purpose statement.
+              {language === 'mr'
+                ? 'विद्यार्थी फोटो साक्षांकन चौकट व उद्देश नोंदीसह अधिकृत बोनाफाईड दाखला.'
+                : 'Official bonafide certification with student photo attestation box and purpose statement.'}
             </p>
           </div>
 
@@ -285,13 +295,15 @@ export function Dashboard() {
               </div>
               <div>
                 <h4 className="text-sm font-bold text-slate-900 group-hover:text-purple-700">
-                  Nirgam Utara (GR Extract)
+                  {language === 'mr' ? 'निर्गम उतारा (जनरल रजिस्टर)' : 'Nirgam Utara (GR Extract)'}
                 </h4>
-                <p className="text-[11px] text-slate-500">जनरल रजिस्टर उतारा</p>
+                <p className="text-[11px] text-slate-500">{language === 'mr' ? 'General Register Extract' : 'जनरल रजिस्टर उतारा'}</p>
               </div>
             </div>
             <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-              True copy legal extract of the 20 official columns from the school General Register volume.
+              {language === 'mr'
+                ? 'शाळेच्या मूळ जनरल रजिस्टरमधील २० अधिकृत रकान्यांची कायदेशीर सत्यप्रत.'
+                : 'True copy legal extract of the 20 official columns from the school General Register volume.'}
             </p>
           </div>
         </div>
@@ -301,10 +313,10 @@ export function Dashboard() {
       <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-bold text-slate-900">
-            {t('studentsByClass')} (Strength Overview)
+            {t('studentsByClass')} ({language === 'mr' ? 'पटसंख्या सारांश' : 'Strength Overview'})
           </h3>
           <span className="text-xs font-semibold text-slate-500">
-            Total Classes: {CLASS_OPTIONS.length}
+            {language === 'mr' ? `एकूण इयत्ता: ${CLASS_OPTIONS.length}` : `Total Classes: ${CLASS_OPTIONS.length}`}
           </span>
         </div>
 
@@ -317,9 +329,13 @@ export function Dashboard() {
                 onClick={() => navigate(`/students?class=${cls}`)}
                 className="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg p-3 text-center transition cursor-pointer"
               >
-                <span className="text-xs font-semibold text-slate-500 block">Class {cls}</span>
+                <span className="text-xs font-semibold text-slate-500 block">
+                  {language === 'mr' ? `इयत्ता ${cls}` : `Class ${cls}`}
+                </span>
                 <span className="text-xl font-extrabold text-blue-900 block mt-1">{count}</span>
-                <span className="text-[10px] text-slate-400">students</span>
+                <span className="text-[10px] text-slate-400">
+                  {language === 'mr' ? 'विद्यार्थी' : 'students'}
+                </span>
               </div>
             );
           })}
@@ -331,17 +347,17 @@ export function Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              Recent General Register Entries
+              {language === 'mr' ? 'नुकतीच झालेली विद्यार्थी नोंदणी' : 'Recent General Register Entries'}
             </h3>
             <p className="text-xs text-slate-500">
-              Latest students recorded in the register
+              {language === 'mr' ? 'जनरल रजिस्टरमधील नवीनतम नोंदी' : 'Latest students recorded in the register'}
             </p>
           </div>
           <button
             type="button"
             id="btn-dash-view-all-students"
             onClick={() => navigate('/students')}
-            className="text-xs font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1"
+            className="text-xs font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
           >
             <span>{t('studentMaster')}</span>
             <ArrowRight className="w-3.5 h-3.5" />

@@ -1,6 +1,11 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { sendPasswordResetEmail, updatePassword } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
+import { 
+  isFirestoreQuotaExceeded, 
+  recordQuotaExceeded, 
+  isQuotaExceededError 
+} from '../utils/firestoreQuota';
 
 export interface AuthCredentials {
   adminEmail: string;
@@ -66,11 +71,16 @@ export const authCredentialsService = {
   // Save credentials to both Firestore and LocalStorage
   async saveCredentials(creds: AuthCredentials): Promise<void> {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
-    try {
-      const docRef = doc(db, 'settings', 'auth_credentials');
-      await setDoc(docRef, creds, { merge: true });
-    } catch (err) {
-      console.warn('Could not save auth credentials to Firestore:', err);
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const docRef = doc(db, 'settings', 'auth_credentials');
+        await setDoc(docRef, creds, { merge: true });
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Could not save auth credentials to Firestore:', err);
+      }
     }
   },
 

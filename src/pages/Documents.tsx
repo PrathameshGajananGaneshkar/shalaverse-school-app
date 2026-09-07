@@ -27,7 +27,7 @@ import { formatDate } from '../utils/dateUtils';
 import { printCertificateElement } from '../utils/exportUtils';
 
 type DocTab = 'tc' | 'bonafide' | 'nirgam-utara';
-type DocLang = 'mr' | 'en' | 'hi';
+type DocLang = 'mr' | 'en';
 
 export function Documents() {
   const { t, language } = useLanguage();
@@ -55,7 +55,7 @@ export function Documents() {
 
   // Document language state: default to Marathi or current app language
   const [docLang, setDocLang] = useState<DocLang>(() => {
-    if (language === 'mr' || language === 'hi' || language === 'en') return language;
+    if (language === 'mr' || language === 'en') return language;
     return 'mr';
   });
 
@@ -239,10 +239,10 @@ export function Documents() {
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
               <FileCheck2 className="w-6 h-6 text-blue-700 shrink-0" />
-              <span>{settings.schoolName}</span>
+              <span>{language === 'mr' || docLang === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName}</span>
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              UDISE: <strong className="text-slate-700">{settings.udiseNumber}</strong> • {settings.address}
+              {language === 'mr' ? 'युडायस' : 'UDISE'}: <strong className="text-slate-700">{settings.udiseNumber}</strong> • {settings.address}
             </p>
           </div>
 
@@ -271,16 +271,6 @@ export function Documents() {
                 }`}
               >
                 English
-              </button>
-              <button
-                type="button"
-                id="btn-doc-lang-hi"
-                onClick={() => setDocLang('hi')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                  docLang === 'hi' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                हिंदी (Hindi)
               </button>
             </div>
 
@@ -420,7 +410,7 @@ export function Documents() {
                 type="text"
                 value={bonafidePurpose}
                 onChange={(e) => setBonafidePurpose(e.target.value)}
-                placeholder={docLang === 'mr' ? 'उदा. शैक्षणिक / शासकीय कामासाठी व शिष्यवृत्ती अर्जासाठी' : docLang === 'hi' ? 'उदा. शैक्षणिक / छात्रवृत्ति आवेदन हेतु' : 'e.g. Educational & Scholarship Application'}
+                placeholder={docLang === 'mr' ? 'उदा. शैक्षणिक / शासकीय कामासाठी व शिष्यवृत्ती अर्जासाठी' : 'e.g. Educational & Scholarship Application'}
                 className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-600"
               />
             </div>
@@ -437,7 +427,7 @@ export function Documents() {
                   type="text"
                   value={leavingReason}
                   onChange={(e) => setLeavingReason(e.target.value)}
-                  placeholder={docLang === 'mr' ? 'उदा. पालकांची बदली / पुढील शिक्षणासाठी' : docLang === 'hi' ? 'उदा. अभिभावक का स्थानांतरण' : 'e.g. Parent Transfer to Another City'}
+                  placeholder={docLang === 'mr' ? 'उदा. पालकांची बदली / पुढील शिक्षणासाठी' : 'e.g. Parent Transfer to Another City'}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -451,7 +441,7 @@ export function Documents() {
                   type="text"
                   value={conduct}
                   onChange={(e) => setConduct(e.target.value)}
-                  placeholder={docLang === 'mr' ? 'उदा. उत्तम व आज्ञाधारक' : docLang === 'hi' ? 'उदा. उत्तम एवं आज्ञाकारी' : 'e.g. Good & Obedient'}
+                  placeholder={docLang === 'mr' ? 'उदा. उत्तम व आज्ञाधारक' : 'e.g. Good & Obedient'}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600"
                 />
               </div>
@@ -465,7 +455,7 @@ export function Documents() {
                   type="text"
                   value={progress}
                   onChange={(e) => setProgress(e.target.value)}
-                  placeholder={docLang === 'mr' ? 'उदा. समाधानकारक / उत्तम' : docLang === 'hi' ? 'उदा. संतोषजनक / उत्तम' : 'e.g. Good / First Class'}
+                  placeholder={docLang === 'mr' ? 'उदा. समाधानकारक / उत्तम' : 'e.g. Good / First Class'}
                   className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-600"
                 />
               </div>

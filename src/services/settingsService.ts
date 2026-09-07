@@ -1,6 +1,11 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { SchoolSettings } from '../types';
+import { 
+  isFirestoreQuotaExceeded, 
+  recordQuotaExceeded, 
+  isQuotaExceededError 
+} from '../utils/firestoreQuota';
 
 export const DEFAULT_SCHOOL_SETTINGS: SchoolSettings = {
   schoolName: 'Shri Shivaji High School and Junior College, Chikhli',
@@ -45,7 +50,12 @@ export const settingsService = {
       }
     }
 
-    // Auto-clean legacy values
+    if (!settings.schoolNameLocal || !settings.schoolNameLocal.trim()) {
+      settings.schoolNameLocal = 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली';
+    }
+    if (!settings.schoolName || !settings.schoolName.trim()) {
+      settings.schoolName = 'Shri Shivaji High School and Junior College, Chikhli';
+    }
     if (!settings.boardAffiliation || settings.boardAffiliation.includes('MH-BD-0402') || settings.boardAffiliation.includes('SSC / HSC Maharashtra State Board')) {
       settings.boardAffiliation = 'Shri Shivaji Shikshan Sanstha, Amravati – Managed by';
     }
@@ -67,11 +77,16 @@ export const settingsService = {
 
   async updateSettings(settings: SchoolSettings): Promise<void> {
     localStorage.setItem('shalaverse_school_settings', JSON.stringify(settings));
-    try {
-      const docRef = doc(db, 'settings', SETTINGS_DOC_ID);
-      await setDoc(docRef, settings, { merge: true });
-    } catch (err) {
-      console.error('Error saving settings to Firestore:', err);
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const docRef = doc(db, 'settings', SETTINGS_DOC_ID);
+        await setDoc(docRef, settings, { merge: true });
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Could not save settings to Firestore, saved locally:', err);
+      }
     }
   }
 };

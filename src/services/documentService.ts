@@ -11,19 +11,29 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { DocumentLog } from '../types';
+import { 
+  isFirestoreQuotaExceeded, 
+  recordQuotaExceeded, 
+  isQuotaExceededError 
+} from '../utils/firestoreQuota';
 
 const COLLECTION_NAME = 'documents_log';
 const LOCAL_LOG_KEY = 'shalaverse_document_logs';
 
 export const documentService = {
   async logDocumentIssue(log: Omit<DocumentLog, 'id'>): Promise<void> {
-    try {
-      await addDoc(collection(db, COLLECTION_NAME), {
-        ...log,
-        serverCreatedAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.warn('Could not log document to Firestore, saving locally:', err);
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        await addDoc(collection(db, COLLECTION_NAME), {
+          ...log,
+          serverCreatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Could not log document to Firestore, saving locally:', err);
+      }
     }
 
     // Save locally as fallback
@@ -73,25 +83,30 @@ export const documentService = {
   async deleteAllDocumentLogs(): Promise<{ deleted: number }> {
     let deleted = 0;
     try {
-      const snapshot = await getDocs(collection(db, COLLECTION_NAME));
-      const docs = snapshot.docs;
-      deleted = docs.length;
-
-      const CHUNK_SIZE = 400;
-      for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
-        const batch = writeBatch(db);
-        const chunk = docs.slice(i, i + CHUNK_SIZE);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
-    } catch (err) {
-      console.warn('Firestore deleteAllDocumentLogs error, wiping local cache:', err);
-    }
-
-    try {
       localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify([]));
     } catch {
       // ignore
+    }
+
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+        const docs = snapshot.docs;
+        deleted = docs.length;
+
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+          const batch = writeBatch(db);
+          const chunk = docs.slice(i, i + CHUNK_SIZE);
+          chunk.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Firestore deleteAllDocumentLogs error, wiping local cache:', err);
+      }
     }
 
     return { deleted };
@@ -99,6 +114,23 @@ export const documentService = {
 
   // Delete logs for a specific student
   async deleteLogsByStudent(studentId: string, grNumber?: string): Promise<void> {
+    try {
+      const local = localStorage.getItem(LOCAL_LOG_KEY);
+      if (local) {
+        const list: DocumentLog[] = JSON.parse(local);
+        const updated = list.filter(l => 
+          l.studentId !== studentId && (grNumber ? l.grNumber !== grNumber : true)
+        );
+        localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(updated));
+      }
+    } catch {
+      // ignore
+    }
+
+    if (isFirestoreQuotaExceeded()) {
+      return;
+    }
+
     try {
       if (studentId) {
         const q1 = query(collection(db, COLLECTION_NAME), where('studentId', '==', studentId));
@@ -124,20 +156,10 @@ export const documentService = {
         }
       }
     } catch (err) {
-      console.warn('Firestore deleteLogsByStudent error:', err);
-    }
-
-    try {
-      const local = localStorage.getItem(LOCAL_LOG_KEY);
-      if (local) {
-        const list: DocumentLog[] = JSON.parse(local);
-        const updated = list.filter(l => 
-          l.studentId !== studentId && (grNumber ? l.grNumber !== grNumber : true)
-        );
-        localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(updated));
+      if (isQuotaExceededError(err)) {
+        recordQuotaExceeded();
       }
-    } catch {
-      // ignore
+      console.warn('Firestore deleteLogsByStudent error:', err);
     }
   }
 };

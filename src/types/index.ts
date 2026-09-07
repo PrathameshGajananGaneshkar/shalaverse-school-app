@@ -1,4 +1,4 @@
-export type Language = 'en' | 'mr' | 'hi';
+export type Language = 'en' | 'mr';
 
 export type AdmissionClass = 
   | '1st' | '2nd' | '3rd' | '4th' | '5th' 

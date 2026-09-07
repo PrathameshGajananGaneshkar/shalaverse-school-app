@@ -41,7 +41,10 @@ export function Modal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden">
+    <div 
+      className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden"
+      onClick={onClose}
+    >
       <div
         className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
@@ -54,8 +57,9 @@ export function Modal({
           </div>
           <button
             id="btn-modal-close"
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition"
+            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />

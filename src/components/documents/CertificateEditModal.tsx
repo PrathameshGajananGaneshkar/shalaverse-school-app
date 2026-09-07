@@ -42,30 +42,30 @@ interface CertificateEditModalProps {
     updatedCustomFields: CustomDocFields, 
     saveToDatabase: boolean
   ) => Promise<void>;
-  lang?: 'en' | 'mr' | 'hi';
+  lang?: 'en' | 'mr';
 }
 
 const COMMON_LEAVING_REASONS = [
-  { mr: 'पालकांची बदली झाल्यामुळे', en: 'Due to Parent Transfer', hi: 'अभिभावक के स्थानांतरण के कारण' },
-  { mr: 'पुढील उच्च शिक्षणासाठी', en: 'For Higher Education', hi: 'उच्च शिक्षा हेतु' },
-  { mr: 'गावी स्थलांतरित झाल्यामुळे', en: 'Relocated to Native Town', hi: 'गांव स्थानांतरित होने के कारण' },
-  { mr: 'इयत्ता १० वी उत्तीर्ण होऊन शाळा सोडली', en: 'Passed 10th Standard', hi: 'कक्षा १०वीं उत्तीर्ण' },
-  { mr: 'इयत्ता १२ वी उत्तीर्ण होऊन शाळा सोडली', en: 'Passed 12th Standard', hi: 'कक्षा १२वीं उत्तीर्ण' },
-  { mr: 'स्वेच्छेने / पालकांच्या विनंतीनुसार', en: 'As per Parent Request', hi: 'अभिभावक के अनुरोध पर' }
+  { mr: 'पालकांची बदली झाल्यामुळे', en: 'Due to Parent Transfer' },
+  { mr: 'पुढील उच्च शिक्षणासाठी', en: 'For Higher Education' },
+  { mr: 'गावी स्थलांतरित झाल्यामुळे', en: 'Relocated to Native Town' },
+  { mr: 'इयत्ता १० वी उत्तीर्ण होऊन शाळा सोडली', en: 'Passed 10th Standard' },
+  { mr: 'इयत्ता १२ वी उत्तीर्ण होऊन शाळा सोडली', en: 'Passed 12th Standard' },
+  { mr: 'स्वेच्छेने / पालकांच्या विनंतीनुसार', en: 'As per Parent Request' }
 ];
 
 const COMMON_CONDUCTS = [
-  { mr: 'उत्तम (Good)', en: 'Good', hi: 'उत्तम (Good)' },
-  { mr: 'अतिशय उत्तम (Very Good)', en: 'Very Good', hi: 'अति उत्तम (Very Good)' },
-  { mr: 'समाधानकारक (Satisfactory)', en: 'Satisfactory', hi: 'संतोषजनक (Satisfactory)' },
-  { mr: 'आज्ञाधारक व शिस्तप्रिय (Disciplined)', en: 'Disciplined & Obedient', hi: 'आज्ञाकारी एवं अनुशासित' }
+  { mr: 'उत्तम (Good)', en: 'Good' },
+  { mr: 'अतिशय उत्तम (Very Good)', en: 'Very Good' },
+  { mr: 'समाधानकारक (Satisfactory)', en: 'Satisfactory' },
+  { mr: 'आज्ञाधारक व शिस्तप्रिय (Disciplined)', en: 'Disciplined & Obedient' }
 ];
 
 const COMMON_PROGRESS = [
-  { mr: 'उत्तम (Good)', en: 'Good', hi: 'उत्तम (Good)' },
-  { mr: 'समाधानकारक (Satisfactory)', en: 'Satisfactory', hi: 'संतोषजनक (Satisfactory)' },
-  { mr: 'प्रथम श्रेणी (First Class)', en: 'First Class', hi: 'प्रथम श्रेणी (First Class)' },
-  { mr: 'विशेष प्राविण्य (Distinction)', en: 'Distinction', hi: 'विशेष योग्यता (Distinction)' }
+  { mr: 'उत्तम (Good)', en: 'Good' },
+  { mr: 'समाधानकारक (Satisfactory)', en: 'Satisfactory' },
+  { mr: 'प्रथम श्रेणी (First Class)', en: 'First Class' },
+  { mr: 'विशेष प्राविण्य (Distinction)', en: 'Distinction' }
 ];
 
 const COMMON_PURPOSES = [

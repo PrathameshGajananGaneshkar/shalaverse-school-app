@@ -3,12 +3,18 @@ import { Outlet } from 'react-router-dom';
 import { Header } from '../common/Header';
 import { Sidebar } from '../common/Sidebar';
 import { Footer } from '../common/Footer';
+import { FirestoreQuotaBanner } from '../common/FirestoreQuotaBanner';
 
 export function AppLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-100/70 text-slate-900 antialiased font-sans">
+      {/* Quota limit alert if daily cloud writes are exhausted */}
+      <div className="print:hidden">
+        <FirestoreQuotaBanner />
+      </div>
+
       {/* Top Header Navigation (Hidden during printing) */}
       <div className="print:hidden">
         <Header onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} />

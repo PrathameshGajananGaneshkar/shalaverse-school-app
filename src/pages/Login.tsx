@@ -21,7 +21,7 @@ import { useSettings } from '../context/SettingsContext';
 
 export function Login() {
   const { login, resetPassword, getCredentials, isAuthenticated } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -134,37 +134,6 @@ export function Login() {
       <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        
-        {/* Language selector in top right */}
-        <div className="flex justify-end mb-4">
-          <div className="inline-flex rounded-lg bg-slate-900/90 p-1 border border-slate-800 text-xs shadow-md backdrop-blur-xs">
-            <button
-              type="button"
-              id="btn-login-lang-mr"
-              onClick={() => setLanguage('mr')}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${language === 'mr' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              मराठी
-            </button>
-            <button
-              type="button"
-              id="btn-login-lang-en"
-              onClick={() => setLanguage('en')}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${language === 'en' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              English
-            </button>
-            <button
-              type="button"
-              id="btn-login-lang-hi"
-              onClick={() => setLanguage('hi')}
-              className={`px-3 py-1 rounded-md font-semibold transition cursor-pointer ${language === 'hi' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}
-            >
-              हिंदी
-            </button>
-          </div>
-        </div>
-
         {/* Brand Heading */}
         <div className="text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/30 mb-3 border border-blue-400/40">
@@ -179,7 +148,7 @@ export function Login() {
               : 'School Admission & General Register Management System'}
           </p>
           <p className="text-xs text-slate-400 mt-1 font-semibold">
-            {settings.schoolName} (UDISE: {settings.udiseNumber})
+            {language === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName} ({language === 'mr' ? 'युडायस' : 'UDISE'}: {settings.udiseNumber})
           </p>
         </div>
 

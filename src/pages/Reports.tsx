@@ -26,7 +26,7 @@ import { CLASS_OPTIONS } from '../components/students/StudentFilter';
 type ReportTab = 'gr-master' | 'class-strength' | 'year-wise' | 'leaving-roster';
 
 export function Reports() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -130,10 +130,10 @@ export function Reports() {
           <div>
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 flex items-center gap-2">
               <BarChart3 className="w-6 h-6 text-blue-700" />
-              <span>General Register Reports & Statistics</span>
+              <span>{language === 'mr' ? 'जनरल रजिस्टर अहवाल व सांख्यिकी' : 'General Register Reports & Statistics'}</span>
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Official school records, class strength rosters, and student summaries.
+              {language === 'mr' ? 'अधिकृत शालेय नोंदी, वर्गनिहाय पटसंख्या तक्ते आणि विद्यार्थी गोषवारा.' : 'Official school records, class strength rosters, and student summaries.'}
             </p>
           </div>
 
@@ -142,7 +142,7 @@ export function Reports() {
               type="button"
               id="btn-print-report"
               onClick={handlePrint}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs sm:text-sm font-semibold flex items-center gap-2 transition cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>{t('print')}</span>
@@ -152,7 +152,7 @@ export function Reports() {
               type="button"
               id="btn-export-report-csv"
               onClick={() => exportStudentsToCSV(filteredStudents, `ShalaVerse_${activeTab}_Report.csv`)}
-              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-2 transition"
+              className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-2 transition cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span>{t('exportExcel')}</span>
@@ -165,37 +165,39 @@ export function Reports() {
           <button
             type="button"
             onClick={() => setActiveTab('gr-master')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap ${
+            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'gr-master'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            General Register (GR) Master Sheet
+            {language === 'mr' ? 'जनरल रजिस्टर (GR) मुख्य पत्रक' : 'General Register (GR) Master Sheet'}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('class-strength')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap ${
+            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'class-strength'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            Class-Wise Strength Report
+            {language === 'mr' ? 'वर्गनिहाय पटसंख्या अहवाल' : 'Class-Wise Strength Report'}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('leaving-roster')}
-            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap ${
+            className={`px-4 py-2 text-xs sm:text-sm font-bold border-b-2 transition whitespace-nowrap cursor-pointer ${
               activeTab === 'leaving-roster'
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            T.C. & School Leaving Roster ({leavingStudents.length})
+            {language === 'mr' 
+              ? `शाळा सोडल्याचा दाखला (T.C.) नोंदवही (${leavingStudents.length})` 
+              : `T.C. & School Leaving Roster (${leavingStudents.length})`}
           </button>
         </div>
 
@@ -208,9 +210,9 @@ export function Reports() {
                 onChange={(e) => setSelectedClass(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:bg-white"
               >
-                <option value="">All Classes</option>
+                <option value="">{language === 'mr' ? 'सर्व इयत्ता' : 'All Classes'}</option>
                 {CLASS_OPTIONS.map(c => (
-                  <option key={c} value={c}>Class {c}</option>
+                  <option key={c} value={c}>{language === 'mr' ? `इयत्ता ${c}` : `Class ${c}`}</option>
                 ))}
               </select>
             </div>
@@ -221,7 +223,7 @@ export function Reports() {
                 onChange={(e) => setSelectedYear(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:bg-white"
               >
-                <option value="">All Admission Years</option>
+                <option value="">{language === 'mr' ? 'सर्व प्रवेश वर्षे' : 'All Admission Years'}</option>
                 {years.map(y => (
                   <option key={y} value={y}>{y}</option>
                 ))}
@@ -235,14 +237,16 @@ export function Reports() {
                   setSelectedClass('');
                   setSelectedYear('');
                 }}
-                className="px-3 py-2 text-xs text-blue-700 hover:underline font-semibold"
+                className="px-3 py-2 text-xs text-blue-700 hover:underline font-semibold cursor-pointer"
               >
-                Clear Filters
+                {language === 'mr' ? 'फिल्टर काढा' : 'Clear Filters'}
               </button>
             )}
 
             <span className="text-xs text-slate-500 ml-auto">
-              Total Listed: <strong>{filteredStudents.length}</strong> students
+              {language === 'mr' 
+                ? `एकूण यादी: ${filteredStudents.length} विद्यार्थी` 
+                : `Total Listed: ${filteredStudents.length} students`}
             </span>
           </div>
         )}
@@ -254,21 +258,25 @@ export function Reports() {
         {/* Printable Header */}
         <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
           <h1 className="text-xl sm:text-2xl font-black uppercase text-slate-950">
-            {settings.schoolName}
+            {language === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName}
           </h1>
-          {settings.schoolNameLocal && (
-            <p className="text-sm font-semibold text-slate-800">
-              {settings.schoolNameLocal}
-            </p>
+          {language === 'mr' ? (
+            <p className="text-xs text-slate-600 font-medium">{settings.schoolName}</p>
+          ) : (
+            settings.schoolNameLocal && (
+              <p className="text-sm font-semibold text-slate-800">
+                {settings.schoolNameLocal}
+              </p>
+            )
           )}
           <p className="text-xs text-slate-700 mt-1">
-            {settings.address} • UDISE: <strong>{settings.udiseNumber}</strong> • Academic Year: <strong>{settings.academicYear || '2026-2027'}</strong>
+            {settings.address} • {language === 'mr' ? 'युडायस' : 'UDISE'}: <strong>{settings.udiseNumber}</strong> • {language === 'mr' ? 'शैक्षणिक वर्ष' : 'Academic Year'}: <strong>{settings.academicYear || '2026-2027'}</strong>
           </p>
 
           <div className="mt-3 inline-block border border-slate-900 px-4 py-1 bg-slate-100 font-bold text-xs uppercase">
-            {activeTab === 'gr-master' && 'GENERAL REGISTER (GR) MASTER ROSTER'}
-            {activeTab === 'class-strength' && 'CLASS-WISE STUDENT STRENGTH & ENROLLMENT REGISTER'}
-            {activeTab === 'leaving-roster' && 'SCHOOL LEAVING / T.C. ISSUANCE REGISTER'}
+            {activeTab === 'gr-master' && (language === 'mr' ? 'जनरल रजिस्टर (GR) मुख्य नोंदवही' : 'GENERAL REGISTER (GR) MASTER ROSTER')}
+            {activeTab === 'class-strength' && (language === 'mr' ? 'वर्गनिहाय विद्यार्थी पटसंख्या व प्रवेश नोंदवही' : 'CLASS-WISE STUDENT STRENGTH & ENROLLMENT REGISTER')}
+            {activeTab === 'leaving-roster' && (language === 'mr' ? 'शाळा सोडल्याचा दाखला (T.C.) वितरण नोंदवही' : 'SCHOOL LEAVING / T.C. ISSUANCE REGISTER')}
           </div>
         </div>
 
@@ -278,15 +286,15 @@ export function Reports() {
             <table className="w-full text-left border-collapse text-xs border border-slate-800">
               <thead>
                 <tr className="bg-slate-900 text-white font-bold border-b border-slate-900">
-                  <th className="p-2 border border-slate-700 w-16">GR No.</th>
-                  <th className="p-2 border border-slate-700">Student Full Name</th>
-                  <th className="p-2 border border-slate-700">Father's Name</th>
-                  <th className="p-2 border border-slate-700 w-16">Class</th>
-                  <th className="p-2 border border-slate-700 w-24">Adm. Date</th>
-                  <th className="p-2 border border-slate-700 w-24">Birth Date</th>
-                  <th className="p-2 border border-slate-700">Caste / Rel.</th>
-                  <th className="p-2 border border-slate-700 w-28">UID (Aadhaar)</th>
-                  <th className="p-2 border border-slate-700 w-24">Mobile</th>
+                  <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'जी.आर. क्र.' : 'GR No.'}</th>
+                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'विद्यार्थ्याचे पूर्ण नाव' : 'Student Full Name'}</th>
+                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'वडिलांचे नाव' : "Father's Name"}</th>
+                  <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'इयत्ता' : 'Class'}</th>
+                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'प्रवेश दिनांक' : 'Adm. Date'}</th>
+                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'जन्म दिनांक' : 'Birth Date'}</th>
+                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'जात / धर्म' : 'Caste / Rel.'}</th>
+                  <th className="p-2 border border-slate-700 w-28">{language === 'mr' ? 'आधार क्र.' : 'UID (Aadhaar)'}</th>
+                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'मोबाईल' : 'Mobile'}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
@@ -315,9 +323,9 @@ export function Reports() {
               <table className="w-full text-left border-collapse text-xs border border-slate-800">
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold border-b border-slate-900">
-                    <th className="p-2.5 border border-slate-700">Class</th>
-                    <th className="p-2.5 border border-slate-700 text-center">Total Students</th>
-                    <th className="p-2.5 border border-slate-700">Category / Caste Distribution</th>
+                    <th className="p-2.5 border border-slate-700">{language === 'mr' ? 'इयत्ता' : 'Class'}</th>
+                    <th className="p-2.5 border border-slate-700 text-center">{language === 'mr' ? 'एकूण विद्यार्थी संख्या' : 'Total Students'}</th>
+                    <th className="p-2.5 border border-slate-700">{language === 'mr' ? 'प्रवर्ग / जात निहाय पटसंख्या' : 'Category / Caste Distribution'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300">
@@ -325,7 +333,9 @@ export function Reports() {
                     const data = classStats[c] || { total: 0, castes: {} };
                     return (
                       <tr key={c} className="hover:bg-slate-50">
-                        <td className="p-2.5 border border-slate-300 font-bold text-sm">Class {c}</td>
+                        <td className="p-2.5 border border-slate-300 font-bold text-sm">
+                          {language === 'mr' ? `इयत्ता ${c}` : `Class ${c}`}
+                        </td>
                         <td className="p-2.5 border border-slate-300 font-black text-center text-sm font-mono text-blue-900">
                           {data.total}
                         </td>
@@ -339,19 +349,23 @@ export function Reports() {
                               ))}
                             </div>
                           ) : (
-                            <span className="text-slate-400 italic">No students enrolled</span>
+                            <span className="text-slate-400 italic">
+                              {language === 'mr' ? 'कोणतेही विद्यार्थी नाहीत' : 'No students enrolled'}
+                            </span>
                           )}
                         </td>
                       </tr>
                     );
                   })}
                   <tr className="bg-slate-100 font-black text-sm border-t-2 border-slate-900">
-                    <td className="p-3 border border-slate-400">Total School Strength</td>
+                    <td className="p-3 border border-slate-400">
+                      {language === 'mr' ? 'एकूण शालेय पटसंख्या' : 'Total School Strength'}
+                    </td>
                     <td className="p-3 border border-slate-400 text-center font-mono text-base text-blue-950">
                       {students.length}
                     </td>
                     <td className="p-3 border border-slate-400">
-                      Active Registered Strength across 12 Classes
+                      {language === 'mr' ? 'सर्व इयत्तांमधील सक्रिय नोंदणीकृत विद्यार्थी संख्या' : 'Active Registered Strength across Classes'}
                     </td>
                   </tr>
                 </tbody>
@@ -364,17 +378,19 @@ export function Reports() {
         {activeTab === 'leaving-roster' && (
           <div className="overflow-x-auto">
             {leavingStudents.length === 0 ? (
-              <p className="text-center text-slate-500 py-12 text-sm">No students currently flagged as left or T.C. issued.</p>
+              <p className="text-center text-slate-500 py-12 text-sm">
+                {language === 'mr' ? 'सध्या कोणताही विद्यार्थी सोडलेला किंवा T.C. दिलेला नाही.' : 'No students currently flagged as left or T.C. issued.'}
+              </p>
             ) : (
               <table className="w-full text-left border-collapse text-xs border border-slate-800">
                 <thead>
                   <tr className="bg-slate-900 text-white font-bold border-b border-slate-900">
-                    <th className="p-2 border border-slate-700 w-16">GR No.</th>
-                    <th className="p-2 border border-slate-700">Student Name</th>
-                    <th className="p-2 border border-slate-700 w-16">Class</th>
-                    <th className="p-2 border border-slate-700 w-28">T.C. Issue Date</th>
-                    <th className="p-2 border border-slate-700">Reason for Leaving</th>
-                    <th className="p-2 border border-slate-700 w-24">Conduct</th>
+                    <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'जी.आर. क्र.' : 'GR No.'}</th>
+                    <th className="p-2 border border-slate-700">{language === 'mr' ? 'विद्यार्थ्याचे नाव' : 'Student Name'}</th>
+                    <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'इयत्ता' : 'Class'}</th>
+                    <th className="p-2 border border-slate-700 w-28">{language === 'mr' ? 'दाखला दिल्याची तारीख' : 'T.C. Issue Date'}</th>
+                    <th className="p-2 border border-slate-700">{language === 'mr' ? 'शाळा सोडण्याचे कारण' : 'Reason for Leaving'}</th>
+                    <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'वर्तणूक' : 'Conduct'}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300">
@@ -382,10 +398,10 @@ export function Reports() {
                     <tr key={s.id || idx} className="hover:bg-slate-50">
                       <td className="p-2 border border-slate-300 font-mono font-bold">{s.grNumber}</td>
                       <td className="p-2 border border-slate-300 font-bold uppercase">{s.studentName}</td>
-                      <td className="p-2 border border-slate-300">Class {s.admissionClass}</td>
+                      <td className="p-2 border border-slate-300">{language === 'mr' ? `इयत्ता ${s.admissionClass}` : `Class ${s.admissionClass}`}</td>
                       <td className="p-2 border border-slate-300 font-mono">{formatDate(s.certificateDate)}</td>
-                      <td className="p-2 border border-slate-300">{s.leavingReason || 'Completed Studies / Course'}</td>
-                      <td className="p-2 border border-slate-300 font-semibold">{s.behaviour || 'Good'}</td>
+                      <td className="p-2 border border-slate-300">{s.leavingReason || (language === 'mr' ? 'अभ्यासक्रम पूर्ण / पुढील शिक्षणासाठी' : 'Completed Studies / Course')}</td>
+                      <td className="p-2 border border-slate-300 font-semibold">{s.behaviour || (language === 'mr' ? 'उत्कृष्ट' : 'Good')}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -397,13 +413,13 @@ export function Reports() {
         {/* Printable Footer Signatures */}
         <div className="mt-12 pt-6 border-t-2 border-slate-900 grid grid-cols-3 text-center text-xs font-bold text-slate-900">
           <div>
-            <p className="mt-8">Prepared by Clerk</p>
+            <p className="mt-8">{language === 'mr' ? 'तयार करणार (लिपिक)' : 'Prepared by Clerk'}</p>
           </div>
           <div>
-            <p className="mt-8">Verified by Office Superintendent</p>
+            <p className="mt-8">{language === 'mr' ? 'तपासणार (अधीक्षक)' : 'Verified by Office Superintendent'}</p>
           </div>
           <div>
-            <p className="mt-8">Headmaster / Principal</p>
+            <p className="mt-8">{language === 'mr' ? 'मुख्याध्यापक / प्राचार्य' : 'Headmaster / Principal'}</p>
             <p className="text-[10px] font-normal text-slate-600">{settings.headmasterName}</p>
           </div>
         </div>
