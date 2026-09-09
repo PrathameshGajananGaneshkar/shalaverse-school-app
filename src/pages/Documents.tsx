@@ -25,7 +25,7 @@ import { DocumentPreviewCanvas } from '../components/documents/DocumentPreviewCa
 import { CertificateEditModal, CustomDocFields } from '../components/documents/CertificateEditModal';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { formatDate } from '../utils/dateUtils';
-import { printCertificateElement, downloadCertificateAsPdf } from '../utils/exportUtils';
+import { printCertificateElement } from '../utils/exportUtils';
 
 type DocTab = 'tc' | 'bonafide' | 'nirgam-utara';
 type DocLang = 'mr' | 'en';
@@ -77,7 +77,6 @@ export function Documents() {
   // Live Edit Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
-  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Logs
   const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
@@ -206,47 +205,6 @@ export function Documents() {
 
     // Trigger Print cleanly across sandboxed iframe and standalone tabs
     printCertificateElement('certificate-print-area', docTitle);
-  };
-
-  const handleDownloadPdf = async () => {
-    if (!selectedStudent || isDownloadingPdf) return;
-    setIsDownloadingPdf(true);
-    try {
-      // Record in document logs asynchronously
-      try {
-        const docType = currentTab === 'tc' ? 'TC' : currentTab === 'bonafide' ? 'BONAFIDE' : 'NIRGAM_UTARA';
-        documentService.logDocumentIssue({
-          documentType: docType,
-          studentId: selectedStudent.studentId || selectedStudent.grNumber,
-          studentName: selectedStudent.studentName,
-          grNumber: selectedStudent.grNumber,
-          studentClass: selectedStudent.admissionClass,
-          issuedDate: issueDate,
-          academicYear: settings.academicYear || '2026-2027',
-          issuedBy: 'Principal Office',
-          purpose: currentTab === 'bonafide' ? bonafidePurpose : leavingReason
-        }).catch((err) => console.warn('Document log background error:', err));
-      } catch (e) {
-        console.warn('Logging error:', e);
-      }
-
-      const docTitle = currentTab === 'tc' 
-        ? `TC_${selectedStudent.grNumber}_${selectedStudent.studentName}`
-        : currentTab === 'bonafide'
-        ? `Bonafide_${selectedStudent.grNumber}_${selectedStudent.studentName}`
-        : `Nirgam_${selectedStudent.grNumber}_${selectedStudent.studentName}`;
-
-      await downloadCertificateAsPdf('certificate-print-area', docTitle);
-      setNotification(docLang === 'mr' ? '१-पेज A4 PDF यशस्वीरित्या डाऊनलोड झाले!' : '1-Page A4 PDF downloaded successfully!');
-      setTimeout(() => setNotification(null), 3500);
-    } catch (err) {
-      console.error('PDF download error:', err);
-      setNotification(docLang === 'mr' ? 'प्रिंट / PDF विंडो उघडत आहे...' : 'Opening Print dialog for PDF...');
-      setTimeout(() => setNotification(null), 3500);
-      handlePrint();
-    } finally {
-      setIsDownloadingPdf(false);
-    }
   };
 
   if (loading) {
@@ -622,8 +580,6 @@ export function Documents() {
                 : 'जनरल रजिस्टर निर्गम उतारा (Nirgam Utara)'
             }
             onPrint={handlePrint}
-            onDownloadPdf={handleDownloadPdf}
-            isDownloadingPdf={isDownloadingPdf}
             onEdit={() => setIsEditModalOpen(true)}
           >
             {currentTab === 'tc' && (

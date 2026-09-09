@@ -3,9 +3,17 @@ import { getAuth } from 'firebase/auth';
 import { 
   initializeFirestore, 
   getFirestore,
+  setLogLevel,
   persistentLocalCache,
   persistentMultipleTabManager
 } from 'firebase/firestore';
+
+// Silence internal Firestore transport connection retry logs
+try {
+  setLogLevel('silent');
+} catch {
+  // ignore if already set
+}
 
 // Configuration loaded from provisioned firebase applet config
 export const firebaseConfig = {
@@ -23,7 +31,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 
-// Use custom provisioned database ID with force long polling and multi-tab persistent cache
+// Use custom provisioned database ID with auto-detect long polling and multi-tab persistent cache
 const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
   ? firebaseConfig.firestoreDatabaseId
   : undefined;
@@ -31,7 +39,7 @@ const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestor
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalForceLongPolling: true,
+    experimentalAutoDetectLongPolling: true,
     localCache: persistentLocalCache({
       tabManager: persistentMultipleTabManager()
     })
@@ -39,7 +47,7 @@ try {
 } catch {
   try {
     firestoreInstance = initializeFirestore(app, {
-      experimentalForceLongPolling: true,
+      experimentalAutoDetectLongPolling: true,
     }, databaseId);
   } catch {
     try {

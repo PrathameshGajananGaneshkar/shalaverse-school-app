@@ -7,9 +7,7 @@ import {
   Edit3, 
   Smartphone, 
   Monitor,
-  Maximize2,
-  FileDown,
-  Loader2
+  Maximize2
 } from 'lucide-react';
 
 interface DocumentPreviewCanvasProps {
@@ -17,8 +15,6 @@ interface DocumentPreviewCanvasProps {
   lang?: 'en' | 'mr';
   documentTitle?: string;
   onPrint: () => void;
-  onDownloadPdf?: () => void;
-  isDownloadingPdf?: boolean;
   onEdit: () => void;
 }
 
@@ -27,8 +23,6 @@ export function DocumentPreviewCanvas({
   lang = 'mr',
   documentTitle = 'दस्तावेज (Certificate)',
   onPrint,
-  onDownloadPdf,
-  isDownloadingPdf = false,
   onEdit
 }: DocumentPreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -237,28 +231,6 @@ export function DocumentPreviewCanvas({
               <Edit3 className="w-3.5 h-3.5" />
               <span>{lang === 'mr' ? 'बदल करा' : 'Edit'}</span>
             </button>
-
-            {onDownloadPdf && (
-              <button
-                type="button"
-                onClick={onDownloadPdf}
-                disabled={isDownloadingPdf}
-                title={lang === 'mr' ? 'वेबसाईटसारखा हुबेहूब १-पेज A4 PDF डाऊनलोड करा' : 'Download exact 1-page A4 PDF'}
-                className="flex-1 sm:flex-initial px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-800/80 text-white font-black text-xs rounded-lg transition shadow-xs flex items-center justify-center gap-1.5 cursor-pointer min-h-[36px]"
-              >
-                {isDownloadingPdf ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>{lang === 'mr' ? 'PDF तयार होत आहे...' : 'Generating...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <FileDown className="w-3.5 h-3.5" />
-                    <span>{lang === 'mr' ? 'PDF डाऊनलोड (1-Page)' : 'Download PDF'}</span>
-                  </>
-                )}
-              </button>
-            )}
 
             <button
               type="button"
