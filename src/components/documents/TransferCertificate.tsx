@@ -175,9 +175,9 @@ export function TransferCertificate({
   const sansthaName = getLocalizedSansthaName(settings.boardAffiliation, lang);
 
   return (
-    <div className="a4-document-page bg-white text-slate-900 mx-auto w-full max-w-[210mm] min-h-[297mm] p-3 sm:p-4 border-2 border-slate-900 relative font-serif print:border-2 print:border-black print:p-2 print:m-0 print:shadow-none shadow-xl group flex flex-col justify-between">
+    <div className="a4-document-page bg-white text-slate-900 mx-auto w-[794px] max-w-[210mm] min-h-[1123px] print:min-h-0 print:h-[285mm] print:max-h-[288mm] p-4 sm:p-5 print:p-2 border-2 border-slate-900 relative font-serif print:border-2 print:border-black print:m-0 print:shadow-none shadow-xl group flex flex-col justify-between box-border overflow-hidden">
       {/* Decorative Outer Double Border */}
-      <div className="a4-inner-box border-2 border-slate-900 p-3 sm:p-4.5 flex-1 flex flex-col justify-between">
+      <div className="a4-inner-box border-2 border-slate-900 p-3 sm:p-4.5 print:p-2.5 flex-1 flex flex-col justify-between">
         
         {/* Certificate Header */}
         <div className="text-center border-b-2 border-slate-900 pb-2">
@@ -206,7 +206,7 @@ export function TransferCertificate({
           </div>
 
           {/* Board, Affiliation, U-DISE, Medium 4-Column Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-[11px] sm:text-xs font-sans font-bold text-slate-900 px-1">
+          <div className="grid grid-cols-4 gap-1 text-xs font-sans font-bold text-slate-900 px-1">
             <div className="text-left">
               <span className="text-slate-600 font-normal">{lang === 'mr' ? 'मंडळ: ' : 'Board: '}</span>
               <strong>{boardName}</strong>
@@ -241,7 +241,7 @@ export function TransferCertificate({
         </div>
 
         {/* Certificate Meta Info Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-sans font-semibold my-2.5 border-b-2 border-slate-900 pb-2 px-1 text-slate-900">
+        <div className="grid grid-cols-4 gap-3 text-xs font-sans font-semibold my-2.5 border-b-2 border-slate-900 pb-2 px-1 text-slate-900">
           <div>
             <span className="text-slate-600 block text-[11px] font-normal">{lang === 'mr' ? 'दाखला क्र.:' : 'Serial No.:'}</span>
             <strong className="text-slate-950 font-mono text-sm underline block mt-0.5">{serialNumber || '___________'}</strong>
@@ -262,12 +262,12 @@ export function TransferCertificate({
 
         {/* Certificate 13-Row Official Table */}
         <div className="flex-1 my-2 flex flex-col justify-center">
-          <table className="w-full text-left border-collapse text-xs sm:text-[13px] print:text-[11.5px] border-2 border-slate-900 leading-normal">
+          <table className="w-full table-fixed text-left border-collapse text-xs sm:text-[13px] print:text-[11.5px] border-2 border-slate-900 leading-normal">
             <tbody>
               {/* 1. Student's Full Name */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold w-9 text-center border-r border-slate-900 bg-slate-50">१</td>
-                <td className="py-2.5 px-3 print:py-1.5 font-bold w-60 sm:w-72 border-r border-slate-900 text-slate-900">
+                <td className="py-2.5 px-2 print:py-1.5 font-bold w-9 text-center border-r border-slate-900 bg-slate-50 shrink-0">१</td>
+                <td className="py-2.5 px-3 print:py-1.5 font-bold w-[220px] border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? "विद्यार्थ्याचे संपूर्ण नाव" : "Student's Full Name"}</div>
                   {lang === 'en' && (
                     <div className="text-[11px] text-slate-600 font-normal">
@@ -275,7 +275,7 @@ export function TransferCertificate({
                     </div>
                   )}
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 bg-white">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 bg-white break-words">
                   <div className="text-sm sm:text-[14.5px] font-black uppercase text-slate-950 mb-1">
                     {getLocalizedStudentName(student, lang)}
                   </div>
@@ -298,22 +298,22 @@ export function TransferCertificate({
 
               {/* 2. Mother's Name */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">२</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">२</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'आईचे नाव' : "Mother's Name"}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950 text-sm">
+                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950 text-sm break-words">
                   {getLocalizedMotherName(student, lang) || '_________________'}
                 </td>
               </tr>
 
               {/* 3. Nationality, Mother Tongue, Religion */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">३</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">३</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'राष्ट्रीयत्व, मातृभाषा व धर्म' : 'Nationality, Mother Tongue & Religion'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 break-words">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
                     <div>
                       <span className="text-slate-600">{lang === 'mr' ? 'राष्ट्रीयत्व: ' : 'Nationality: '}</span>
@@ -333,11 +333,11 @@ export function TransferCertificate({
 
               {/* 4. Caste & Sub-Caste */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">४</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">४</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'जात व प्रवर्ग / पोटजात' : 'Caste & Sub-Caste'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 break-words">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                     <div>
                       <span className="text-slate-600">{lang === 'mr' ? 'जात: ' : 'Caste: '}</span>
@@ -353,11 +353,11 @@ export function TransferCertificate({
 
               {/* 5. Place of Birth */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">५</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">५</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'जन्मस्थळ' : 'Place of Birth'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 break-words">
                   <div className="text-xs sm:text-[13px] leading-relaxed">
                     <span className="text-slate-600">{lang === 'mr' ? 'गाव/शहर: ' : 'Village/City: '}</span>
                     <strong className="font-bold text-slate-950 text-sm mr-2">{birthParts.village}</strong>
@@ -381,11 +381,11 @@ export function TransferCertificate({
 
               {/* 6. Date of Birth according to Christian Era & in words */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">६</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">६</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'इसवी सनाप्रमाणे जन्मदिनांक (अंकी व अक्षरी)' : 'Date of Birth (in figures & words)'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5">
+                <td className="py-2.5 px-3 print:py-1.5 break-words">
                   <div className="flex flex-wrap items-baseline gap-2 mb-1">
                     <span className="text-slate-600 text-xs">{lang === 'mr' ? 'अंकी: ' : 'In Figures: '}</span>
                     <strong className="font-mono font-black text-slate-950 text-sm underline">{formatDate(student.birthDate)}</strong>
@@ -401,22 +401,22 @@ export function TransferCertificate({
 
               {/* 7. Previous School and Standard */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">७</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">७</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'यापूर्वीची शाळा व इयत्ता' : 'Previous School and Standard'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-900">
+                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-900 break-words">
                   {getLocalizedPreviousSchool(student, lang) || '_____________'}
                 </td>
               </tr>
 
               {/* 8. Date of Admission to this School & Standard */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">८</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">८</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'या शाळेत प्रवेश दिनांक व इयत्ता' : 'Date of Admission to this School & Standard'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 break-words">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                     <div>
                       <span className="text-slate-600">{lang === 'mr' ? 'प्रवेश दिनांक: ' : 'Date of Admission: '}</span>
@@ -432,11 +432,11 @@ export function TransferCertificate({
 
               {/* 9. Progress in Studies & Conduct */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">९</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">९</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'अभ्यासातील प्रगती व वर्तणूक' : 'Progress in Studies & Conduct'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 break-words">
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
                     <div>
                       <span className="text-slate-600">{lang === 'mr' ? 'अभ्यासातील प्रगती: ' : 'Progress in Studies: '}</span>
@@ -452,22 +452,22 @@ export function TransferCertificate({
 
               {/* 10. Date of Leaving School */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">१०</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">१०</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'शाळा सोडल्याची तारीख' : 'Date of Leaving School'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 font-mono font-bold text-slate-950 text-sm">
+                <td className="py-2.5 px-3 print:py-1.5 font-mono font-bold text-slate-950 text-sm break-words">
                   {formatDate(issueDate)}
                 </td>
               </tr>
 
               {/* 11. Standard in which studying & since when */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">११</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">११</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'कोणत्या इयत्तेत शिकत होता व केव्हापासून' : 'Standard in which studying & since when'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950">
+                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950 break-words">
                   {lang === 'mr' 
                     ? `इयत्ता ${getLocalizedClass(student.admissionClass, lang)} (${stdWords}) - शैक्षणिक वर्ष ${student.admissionYear || '२०२६-२७'} पासून` 
                     : `Class ${student.admissionClass} (${stdWords}) since academic year ${student.admissionYear || '2026-27'}`}
@@ -476,22 +476,22 @@ export function TransferCertificate({
 
               {/* 12. Reason for Leaving School */}
               <tr className="border-b border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">१२</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">१२</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'शाळा सोडण्याचे कारण' : 'Reason for Leaving School'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950 text-sm">
+                <td className="py-2.5 px-3 print:py-1.5 font-bold text-slate-950 text-sm break-words">
                   {getLocalizedLeavingReason(finalLeavingReason, lang)}
                 </td>
               </tr>
 
               {/* 13. Remarks */}
               <tr className="border-b-0 border-slate-900">
-                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50">१३</td>
+                <td className="py-2.5 px-2 print:py-1.5 font-bold text-center border-r border-slate-900 bg-slate-50 shrink-0">१३</td>
                 <td className="py-2.5 px-3 print:py-1.5 font-bold border-r border-slate-900 text-slate-900">
                   <div className="text-slate-950">{lang === 'mr' ? 'शेरा' : 'Remarks'}</div>
                 </td>
-                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 font-medium">
+                <td className="py-2.5 px-3 print:py-1.5 text-slate-950 font-medium break-words">
                   {lang === 'mr' ? 'सर्व शालेय फी पूर्ण भरलेली आहे. कोणतीही बाकी नाही.' : 'All school dues paid in full. No dues pending.'}
                 </td>
               </tr>
@@ -513,26 +513,26 @@ export function TransferCertificate({
             <span>{lang === 'mr' ? 'ठिकाण: ' : 'Place: '}<strong className="text-slate-950">{placeName}</strong></span>
           </div>
 
-          <div className="grid grid-cols-3 text-center gap-3 text-xs font-bold text-slate-900 my-1">
-            <div>
-              <div className="h-12 sm:h-14 print:h-10 flex items-end justify-center">
-                <span className="border-b border-dotted border-slate-600 w-32 inline-block"></span>
+          <div className="grid grid-cols-3 flex flex-row items-end justify-between text-center gap-2 sm:gap-3 text-xs font-bold text-slate-900 my-1 w-full">
+            <div className="flex-1 text-center">
+              <div className="h-10 sm:h-12 print:h-8 flex items-end justify-center">
+                <span className="border-b border-dotted border-slate-600 w-28 sm:w-32 inline-block"></span>
               </div>
               <p className="mt-1">{lang === 'mr' ? 'वर्गशिक्षक' : 'Class Teacher'}</p>
             </div>
 
-            <div>
-              <div className="h-12 sm:h-14 print:h-10 flex items-center justify-center">
-                <div className="w-20 h-10 border border-dashed border-slate-400 rounded flex items-center justify-center text-[10px] text-slate-400">
+            <div className="flex-1 text-center">
+              <div className="h-10 sm:h-12 print:h-8 flex items-center justify-center">
+                <div className="w-20 h-9 border border-dashed border-slate-400 rounded flex items-center justify-center text-[10px] text-slate-400">
                   {lang === 'mr' ? 'शाळेचा शिक्का' : 'School Seal'}
                 </div>
               </div>
               <p className="mt-1">{lang === 'mr' ? 'लिपिक' : 'Clerk'}</p>
             </div>
 
-            <div>
-              <div className="h-12 sm:h-14 print:h-10 flex items-end justify-center">
-                <span className="border-b border-dotted border-slate-600 w-36 inline-block"></span>
+            <div className="flex-1 text-center">
+              <div className="h-10 sm:h-12 print:h-8 flex items-end justify-center">
+                <span className="border-b border-dotted border-slate-600 w-32 sm:w-36 inline-block"></span>
               </div>
               <p className="mt-1 text-slate-950">{lang === 'mr' ? 'मुख्याध्यापक' : 'Headmaster'}</p>
               <p className="text-[10px] font-normal text-slate-600 leading-none mt-0.5">{settings.headmasterName}</p>

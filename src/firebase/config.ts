@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { initializeFirestore, getFirestore } from 'firebase/firestore';
+import { 
+  initializeFirestore, 
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from 'firebase/firestore';
 
 // Configuration loaded from provisioned firebase applet config
 export const firebaseConfig = {
@@ -18,7 +23,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 
-// Use custom provisioned database ID with force long polling for reliable immediate connectivity in browser sandboxes/iframes
+// Use custom provisioned database ID with force long polling and multi-tab persistent cache
 const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
   ? firebaseConfig.firestoreDatabaseId
   : undefined;
@@ -27,12 +32,21 @@ let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
     experimentalForceLongPolling: true,
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager()
+    })
   }, databaseId);
 } catch {
   try {
-    firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+    firestoreInstance = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, databaseId);
   } catch {
-    firestoreInstance = getFirestore(app);
+    try {
+      firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
+    } catch {
+      firestoreInstance = getFirestore(app);
+    }
   }
 }
 

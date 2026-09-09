@@ -32,8 +32,10 @@ export const settingsService = {
     let settings = DEFAULT_SCHOOL_SETTINGS;
     try {
       const docRef = doc(db, 'settings', SETTINGS_DOC_ID);
-      const snapshot = await getDoc(docRef);
-      if (snapshot.exists()) {
+      const fetchPromise = getDoc(docRef);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+      const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+      if (snapshot && snapshot.exists()) {
         settings = { ...DEFAULT_SCHOOL_SETTINGS, ...snapshot.data() } as SchoolSettings;
       }
     } catch (err) {

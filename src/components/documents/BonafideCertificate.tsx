@@ -192,8 +192,8 @@ export function BonafideCertificate({
   return (
     <div className="w-full flex flex-col items-center">
       {/* 1. EXACT SCHOOL PROFORMA (Identical layout for English, Marathi & Hindi) */}
-      <div className="a4-document-page bg-white text-slate-950 mx-auto w-full max-w-[210mm] min-h-[297mm] p-4 sm:p-6 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-4 print:m-0 print:shadow-none shadow-xl flex flex-col justify-between">
-          <div className="a4-inner-box border-2 border-slate-900 p-6 sm:p-10 flex-1 flex flex-col justify-between">
+      <div className="a4-document-page bg-white text-slate-950 mx-auto w-[794px] max-w-[210mm] min-h-[1123px] print:min-h-0 print:h-[285mm] print:max-h-[288mm] p-6 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-3 print:m-0 print:shadow-none shadow-xl flex flex-col justify-between box-border overflow-hidden">
+          <div className="a4-inner-box border-2 border-slate-900 p-6 sm:p-10 print:p-4 print:py-3 flex-1 flex flex-col justify-between">
             
             {/* Header Section */}
             <div className="text-center">
@@ -318,7 +318,7 @@ export function BonafideCertificate({
               </div>
 
               {/* Signature Line */}
-              <div className="flex justify-between items-end pt-12 sm:pt-16 pb-2 px-2 sm:px-6">
+              <div className="flex justify-between items-end pt-12 sm:pt-16 print:pt-6 pb-2 px-2 sm:px-6 w-full">
                 <div className="text-center">
                   <div className="h-10 flex items-end justify-center">
                     <span className="w-36 border-b border-dotted border-slate-800 inline-block"></span>

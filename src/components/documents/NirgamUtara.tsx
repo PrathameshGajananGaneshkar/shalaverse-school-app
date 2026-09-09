@@ -446,8 +446,8 @@ export function NirgamUtara({
   return (
     <div className="w-full flex flex-col items-center">
       {/* A4 Printable Document Container */}
-      <div className="a4-document-page bg-white text-slate-950 mx-auto w-full max-w-[210mm] min-h-[297mm] p-5 sm:p-7 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-5 print:m-0 print:shadow-none shadow-xl flex flex-col justify-between">
-        <div className="a4-inner-box border-2 border-slate-900 p-4 sm:p-6 flex-1 flex flex-col justify-between">
+      <div className="a4-document-page bg-white text-slate-950 mx-auto w-[794px] max-w-[210mm] min-h-[1123px] print:min-h-0 print:h-[285mm] print:max-h-[288mm] p-5 sm:p-7 border-4 border-double border-slate-900 relative font-serif print:border-4 print:border-double print:border-black print:p-3 print:m-0 print:shadow-none shadow-xl flex flex-col justify-between box-border overflow-hidden">
+        <div className="a4-inner-box border-2 border-slate-900 p-4 sm:p-6 print:p-2.5 flex-1 flex flex-col justify-between">
           
           {/* Top Title Section */}
           <div className="text-center pb-2 border-b-2 border-slate-900">
@@ -507,8 +507,8 @@ export function NirgamUtara({
           </div>
 
           {/* 21 Exact Rows Table */}
-          <div className="my-2 flex-1 flex flex-col justify-center">
-            <table className="w-full border-collapse text-xs sm:text-[13px] print:text-[11.5px] border-2 border-slate-900 leading-normal">
+          <div className="my-1.5 flex-1 flex flex-col justify-center">
+            <table className="w-full table-fixed border-collapse text-xs sm:text-[13px] print:text-[10px] border-2 border-slate-900 leading-tight print:leading-tight">
               <tbody>
                 {t.rows.map((rowItem, idx) => {
                   const rowNum = idx + 1;
@@ -520,17 +520,17 @@ export function NirgamUtara({
                       className={`border-b border-slate-900 ${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}`}
                     >
                       {/* Column 1: Row Number (1 to 21) */}
-                      <td className="w-10 sm:w-12 py-1.5 px-2 print:py-1 font-bold text-center border-r border-slate-900 bg-slate-100/70 shrink-0">
+                      <td className="w-9 py-1 sm:py-1.5 px-1.5 print:py-0.5 print:px-1 font-bold text-center border-r border-slate-900 bg-slate-100/70 shrink-0">
                         {rowItem.no}
                       </td>
 
                       {/* Column 2: Particular / Label */}
-                      <td className="w-[45%] sm:w-[48%] py-1.5 px-3 print:py-1 font-semibold border-r border-slate-900 text-slate-900">
+                      <td className="w-[43%] py-1 sm:py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-semibold border-r border-slate-900 text-slate-900 break-words">
                         {rowItem.label}
                       </td>
 
                       {/* Column 3: Record Value */}
-                      <td className="py-1.5 px-3 print:py-1 font-bold text-slate-950">
+                      <td className="w-[53%] py-1 sm:py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-bold text-slate-950 break-words">
                         {isEditingInline && itemData.editable ? (
                           <input
                             type="text"
@@ -589,7 +589,7 @@ export function NirgamUtara({
               </div>
 
               {/* Center: Stamp Circle (Subtle School Seal) */}
-              <div className="hidden sm:flex flex-col items-center justify-center">
+              <div className="flex flex-col items-center justify-center">
                 <div className="w-20 h-14 border border-dashed border-slate-400 rounded flex items-center justify-center text-[10px] text-slate-400 font-sans">
                   {currentLang === 'en' ? 'School Seal' : 'शाळेचा शिक्का'}
                 </div>

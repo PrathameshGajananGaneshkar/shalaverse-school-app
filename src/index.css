@@ -33,10 +33,10 @@
   /* Universal Single-Page A4 Certificate Container */
   .a4-document-page {
     width: 100% !important;
-    max-width: 198mm !important;
-    min-height: 278mm !important;
-    max-height: 284mm !important;
-    height: 282mm !important;
+    max-width: 202mm !important;
+    min-height: 0 !important;
+    max-height: 288mm !important;
+    height: 288mm !important;
     margin: 0 auto !important;
     padding: 3mm 4mm !important;
     box-sizing: border-box !important;
@@ -54,14 +54,30 @@
   }
 
   .a4-inner-box {
+    flex: 1 1 auto !important;
     height: 100% !important;
     max-height: 100% !important;
     box-sizing: border-box !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: space-between !important;
-    padding: 3mm 4mm !important;
+    padding: 2.5mm 3.5mm !important;
     border-color: #000000 !important;
+    overflow: hidden !important;
+  }
+
+  /* 3-column signature block print fallback to guarantee 1-row layout */
+  .grid-cols-3, [class*="grid-cols-3"] {
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+  .grid-cols-3 > div, [class*="grid-cols-3"] > div {
+    flex: 1 1 0% !important;
+    text-align: center !important;
   }
 
   .print\:border-2 {

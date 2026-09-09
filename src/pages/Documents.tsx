@@ -21,10 +21,11 @@ import { useSettings } from '../context/SettingsContext';
 import { TransferCertificate } from '../components/documents/TransferCertificate';
 import { BonafideCertificate } from '../components/documents/BonafideCertificate';
 import { NirgamUtara } from '../components/documents/NirgamUtara';
+import { DocumentPreviewCanvas } from '../components/documents/DocumentPreviewCanvas';
 import { CertificateEditModal, CustomDocFields } from '../components/documents/CertificateEditModal';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { formatDate } from '../utils/dateUtils';
-import { printCertificateElement } from '../utils/exportUtils';
+import { printCertificateElement, downloadCertificateAsPdf } from '../utils/exportUtils';
 
 type DocTab = 'tc' | 'bonafide' | 'nirgam-utara';
 type DocLang = 'mr' | 'en';
@@ -76,6 +77,7 @@ export function Documents() {
   // Live Edit Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   // Logs
   const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
@@ -204,6 +206,47 @@ export function Documents() {
 
     // Trigger Print cleanly across sandboxed iframe and standalone tabs
     printCertificateElement('certificate-print-area', docTitle);
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!selectedStudent || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      // Record in document logs asynchronously
+      try {
+        const docType = currentTab === 'tc' ? 'TC' : currentTab === 'bonafide' ? 'BONAFIDE' : 'NIRGAM_UTARA';
+        documentService.logDocumentIssue({
+          documentType: docType,
+          studentId: selectedStudent.studentId || selectedStudent.grNumber,
+          studentName: selectedStudent.studentName,
+          grNumber: selectedStudent.grNumber,
+          studentClass: selectedStudent.admissionClass,
+          issuedDate: issueDate,
+          academicYear: settings.academicYear || '2026-2027',
+          issuedBy: 'Principal Office',
+          purpose: currentTab === 'bonafide' ? bonafidePurpose : leavingReason
+        }).catch((err) => console.warn('Document log background error:', err));
+      } catch (e) {
+        console.warn('Logging error:', e);
+      }
+
+      const docTitle = currentTab === 'tc' 
+        ? `TC_${selectedStudent.grNumber}_${selectedStudent.studentName}`
+        : currentTab === 'bonafide'
+        ? `Bonafide_${selectedStudent.grNumber}_${selectedStudent.studentName}`
+        : `Nirgam_${selectedStudent.grNumber}_${selectedStudent.studentName}`;
+
+      await downloadCertificateAsPdf('certificate-print-area', docTitle);
+      setNotification(docLang === 'mr' ? '१-पेज A4 PDF यशस्वीरित्या डाऊनलोड झाले!' : '1-Page A4 PDF downloaded successfully!');
+      setTimeout(() => setNotification(null), 3500);
+    } catch (err) {
+      console.error('PDF download error:', err);
+      setNotification(docLang === 'mr' ? 'प्रिंट / PDF विंडो उघडत आहे...' : 'Opening Print dialog for PDF...');
+      setTimeout(() => setNotification(null), 3500);
+      handlePrint();
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   if (loading) {
@@ -540,59 +583,49 @@ export function Documents() {
 
       {/* Quick Action & Live Certificate Preview / Print Canvas */}
       {selectedStudent ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           
-          {/* Quick Action Bar above Canvas (Hidden in print) */}
-          <div className="bg-slate-900 text-white rounded-xl p-3.5 sm:px-5 sm:py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md border border-slate-800 print:hidden">
-            <div className="flex items-center gap-3">
+          {/* Student & Document Summary Header Banner (Hidden in print) */}
+          <div className="bg-slate-900 text-white rounded-xl p-3 sm:px-4 sm:py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-sm border border-slate-800 print:hidden">
+            <div className="flex items-center gap-2.5">
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></div>
               <div>
-                <p className="text-xs sm:text-sm font-black tracking-wide flex items-center gap-2">
+                <p className="text-xs sm:text-sm font-black tracking-wide flex flex-wrap items-center gap-2">
                   <span>
                     {currentTab === 'tc' && 'शाळा सोडल्याचा दाखला (T.C.)'}
                     {currentTab === 'bonafide' && 'बोनाफाईड प्रमाणपत्र (Bonafide)'}
                     {currentTab === 'nirgam-utara' && 'जनरल रजिस्टर निर्गम उतारा (Nirgam Utara)'}
                   </span>
-                  <span className="text-blue-300 font-mono text-xs font-bold bg-blue-900/60 px-2 py-0.5 rounded border border-blue-700/50">
+                  <span className="text-blue-300 font-mono text-xs font-bold bg-blue-950/80 px-2 py-0.5 rounded border border-blue-700/60">
                     GR #{selectedStudent.grNumber}
                   </span>
-                  <span className="text-slate-300 font-medium text-xs hidden md:inline">
+                  <span className="text-slate-300 font-medium text-xs">
                     ({selectedStudent.studentName})
                   </span>
                 </p>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  {docLang === 'mr' 
-                    ? 'प्रिंट काढण्यापूर्वी दाखल्यातील कोणत्याही माहितीत दुरुस्ती किंवा बदल करण्यासाठी "माहिती संपादित करा" बटण वापरा.' 
-                    : 'To make any corrections or changes before printing, click the "Edit Details" button.'}
-                </p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                id="btn-canvas-edit"
-                onClick={() => setIsEditModalOpen(true)}
-                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>{docLang === 'mr' ? 'माहिती संपादित करा (Edit)' : 'Edit Details'}</span>
-              </button>
-
-              <button
-                type="button"
-                id="btn-canvas-print"
-                onClick={handlePrint}
-                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                <span>{docLang === 'mr' ? 'प्रिंट करा (Print)' : 'Print'}</span>
-              </button>
+            
+            <div className="text-[11px] text-slate-400 hidden sm:block">
+              {docLang === 'mr' ? 'A4 मूळ प्रोफॉर्मानुसार तयार' : 'Official A4 Proforma'}
             </div>
           </div>
 
-          {/* Certificate Print Paper Canvas */}
-          <div id="certificate-print-area" className="p-2 sm:p-4 bg-slate-200/60 rounded-2xl border border-slate-300/80 shadow-inner flex justify-center print:bg-transparent print:p-0 print:border-none print:shadow-none">
+          {/* Fully Responsive Document Canvas with Auto-Fit and Zoom for Mobile & Desktop */}
+          <DocumentPreviewCanvas
+            lang={docLang}
+            documentTitle={
+              currentTab === 'tc' 
+                ? 'शाळा सोडल्याचा दाखला (T.C.)' 
+                : currentTab === 'bonafide' 
+                ? 'बोनाफाईड प्रमाणपत्र (Bonafide)' 
+                : 'जनरल रजिस्टर निर्गम उतारा (Nirgam Utara)'
+            }
+            onPrint={handlePrint}
+            onDownloadPdf={handleDownloadPdf}
+            isDownloadingPdf={isDownloadingPdf}
+            onEdit={() => setIsEditModalOpen(true)}
+          >
             {currentTab === 'tc' && (
               <TransferCertificate
                 student={selectedStudent}
@@ -627,7 +660,7 @@ export function Documents() {
                 onEdit={() => setIsEditModalOpen(true)}
               />
             )}
-          </div>
+          </DocumentPreviewCanvas>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
