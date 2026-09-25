@@ -842,6 +842,23 @@ export function printCertificateElement(elementId: string = 'certificate-print-a
         text-align: center !important;
       }
 
+      /* Nirgam Utara middle table sizing enhancement */
+      .nirgam-table {
+        width: 100% !important;
+        height: 100% !important;
+        font-size: 13.5px !important;
+        line-height: 1.35 !important;
+      }
+      .nirgam-table tr {
+        height: 4.7% !important;
+        min-height: 9mm !important;
+      }
+      .nirgam-table td {
+        vertical-align: middle !important;
+        padding-top: 3px !important;
+        padding-bottom: 3px !important;
+      }
+
       /* Strict 1-page print media rules */
       @media print {
         html, body {
@@ -853,6 +870,21 @@ export function printCertificateElement(elementId: string = 'certificate-print-a
         }
         .print-bar {
           display: none !important;
+        }
+        .nirgam-table {
+          width: 100% !important;
+          height: 100% !important;
+          font-size: 12.5px !important;
+          line-height: 1.3 !important;
+        }
+        .nirgam-table tr {
+          height: 4.7% !important;
+          min-height: 8.8mm !important;
+        }
+        .nirgam-table td {
+          vertical-align: middle !important;
+          padding-top: 2.5px !important;
+          padding-bottom: 2.5px !important;
         }
         .a4-document-page {
           box-shadow: none !important;

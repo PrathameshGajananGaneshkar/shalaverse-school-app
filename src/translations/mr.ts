@@ -96,7 +96,7 @@ export const mr: typeof en = {
   newAdmissions: 'नवीन प्रवेश',
   studentsByClass: 'इयत्तेनुसार विद्यार्थी',
   documentsGenerated: 'वितरित केलेले दाखले',
-  activeClasses: 'सक्रिय इयत्ता (१ ली ते १२ वी)',
+  activeClasses: 'सक्रिय इयत्ता',
   
   // Reports
   studentRoster: 'जनरल रजिस्टर (GR) मुख्य यादी',

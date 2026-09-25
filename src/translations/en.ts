@@ -94,7 +94,7 @@ export const en = {
   newAdmissions: 'New Admissions',
   studentsByClass: 'Students by Class',
   documentsGenerated: 'Certificates Issued',
-  activeClasses: 'Active Classes (1st to 12th)',
+  activeClasses: 'Active Classes',
   
   // Reports
   studentRoster: 'General Register (GR) Master Report',

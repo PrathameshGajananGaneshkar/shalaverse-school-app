@@ -506,9 +506,9 @@ export function NirgamUtara({
             </div>
           </div>
 
-          {/* 21 Exact Rows Table */}
-          <div className="my-1.5 flex-1 flex flex-col justify-center">
-            <table className="w-full table-fixed border-collapse text-xs sm:text-[13px] print:text-[10px] border-2 border-slate-900 leading-tight print:leading-tight">
+          {/* 21 Exact Rows Table - Large, readable & filling vertical space */}
+          <div className="my-2 sm:my-3 print:my-1.5 flex-1 flex flex-col justify-stretch min-h-0">
+            <table className="nirgam-table w-full h-full table-fixed border-collapse text-xs sm:text-[14px] print:text-[12.5px] border-2 border-slate-900 leading-snug print:leading-snug">
               <tbody>
                 {t.rows.map((rowItem, idx) => {
                   const rowNum = idx + 1;
@@ -517,20 +517,20 @@ export function NirgamUtara({
                   return (
                     <tr 
                       key={rowItem.no} 
-                      className={`border-b border-slate-900 ${idx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white'}`}
+                      className={`border-b border-slate-900 ${idx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'} h-[36px] sm:h-[38px] print:h-[8.8mm]`}
                     >
                       {/* Column 1: Row Number (1 to 21) */}
-                      <td className="w-9 py-1 sm:py-1.5 px-1.5 print:py-0.5 print:px-1 font-bold text-center border-r border-slate-900 bg-slate-100/70 shrink-0">
+                      <td className="w-10 sm:w-12 py-1 sm:py-1.5 print:py-0.5 px-1 font-bold text-center border-r border-slate-900 bg-slate-100/70 shrink-0 text-xs sm:text-base print:text-[12.5px] align-middle">
                         {rowItem.no}
                       </td>
 
                       {/* Column 2: Particular / Label */}
-                      <td className="w-[43%] py-1 sm:py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-semibold border-r border-slate-900 text-slate-900 break-words">
+                      <td className="w-[41%] sm:w-[40%] py-1 sm:py-1.5 print:py-0.5 px-2.5 sm:px-3 print:px-2 font-bold border-r border-slate-900 text-slate-900 break-words text-xs sm:text-[13.5px] print:text-[12px] leading-snug align-middle">
                         {rowItem.label}
                       </td>
 
                       {/* Column 3: Record Value */}
-                      <td className="w-[53%] py-1 sm:py-1.5 px-2.5 print:py-0.5 print:px-1.5 font-bold text-slate-950 break-words">
+                      <td className="w-[54%] sm:w-[55%] py-1 sm:py-1.5 print:py-0.5 px-2.5 sm:px-3 print:px-2 font-bold text-slate-950 break-words text-xs sm:text-[14px] print:text-[12.5px] leading-snug align-middle">
                         {isEditingInline && itemData.editable ? (
                           <input
                             type="text"
@@ -543,10 +543,10 @@ export function NirgamUtara({
                               if (itemData.key === 'identificationMarks') setIdentificationMarks(val);
                               if (itemData.key === 'remarks') setRemarks(val);
                             }}
-                            className="w-full border-b border-blue-600 bg-blue-50/60 px-1 py-0.5 text-xs sm:text-[13px] font-bold outline-none rounded"
+                            className="w-full border-b border-blue-600 bg-blue-50/60 px-1.5 py-0.5 text-xs sm:text-sm print:text-[12.5px] font-bold outline-none rounded"
                           />
                         ) : (
-                          <span className={rowNum === 1 || rowNum === 2 ? 'font-black tracking-wide text-[13.5px] sm:text-[14px]' : ''}>
+                          <span className={rowNum === 1 || rowNum === 2 ? 'font-black tracking-wide text-sm sm:text-base print:text-[14px]' : ''}>
                             {itemData.text}
                           </span>
                         )}
@@ -559,11 +559,11 @@ export function NirgamUtara({
           </div>
 
           {/* Bottom Footer Section: Date, Place and Principal Signature */}
-          <div className="mt-3 pt-2.5 border-t-2 border-slate-900 text-xs sm:text-sm font-semibold">
+          <div className="mt-2 pt-2 print:mt-1.5 print:pt-1.5 border-t-2 border-slate-900 text-xs sm:text-sm font-semibold">
             <div className="flex items-end justify-between px-2">
               
               {/* Left: Date & Place */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex items-baseline gap-2">
                   <span className="font-bold text-slate-950">{t.dateLabel} :</span>
                   <span className="font-mono font-bold border-b border-dotted border-slate-800 pb-0.5 min-w-[120px] inline-block">
@@ -590,14 +590,14 @@ export function NirgamUtara({
 
               {/* Center: Stamp Circle (Subtle School Seal) */}
               <div className="flex flex-col items-center justify-center">
-                <div className="w-20 h-14 border border-dashed border-slate-400 rounded flex items-center justify-center text-[10px] text-slate-400 font-sans">
+                <div className="w-20 h-13 border border-dashed border-slate-400 rounded flex items-center justify-center text-[10px] text-slate-400 font-sans">
                   {currentLang === 'en' ? 'School Seal' : 'शाळेचा शिक्का'}
                 </div>
               </div>
 
               {/* Right: Principal Signature */}
               <div className="text-center space-y-1">
-                <div className="h-12 sm:h-14 flex items-end justify-center">
+                <div className="h-10 sm:h-12 flex items-end justify-center">
                   <span className="border-b border-dotted border-slate-800 w-40 sm:w-48 inline-block"></span>
                 </div>
                 <p className="font-bold text-slate-950 text-xs sm:text-[13px] pt-0.5">
