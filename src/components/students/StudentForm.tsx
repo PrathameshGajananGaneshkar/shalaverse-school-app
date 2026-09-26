@@ -20,6 +20,7 @@ import { transliterateToDevanagari, deduplicateRepeatedPhrase } from '../../util
 import { generateStudentId } from '../../utils/studentIdGenerator';
 
 interface StudentFormProps {
+  key?: string | number;
   initialData?: Partial<Student>;
   onSubmit: (data: Omit<Student, 'id'>) => Promise<void>;
   isEditing?: boolean;
@@ -32,7 +33,7 @@ export function StudentForm({
   isEditing = false,
   isLoading = false
 }: StudentFormProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -51,7 +52,7 @@ export function StudentForm({
     motherName: initialData?.motherName || '',
     motherNameLocal: initialData?.motherNameLocal || '',
     birthDate: initialData?.birthDate || '',
-    birthPlace: initialData?.birthPlace || 'Pune, Maharashtra',
+    birthPlace: initialData?.birthPlace || '',
     birthPlaceLocal: initialData?.birthPlaceLocal || '',
     nationality: initialData?.nationality || 'Indian',
     motherTongue: initialData?.motherTongue || 'Marathi',
@@ -114,7 +115,11 @@ export function StudentForm({
     });
 
     if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: '' }));
+      setErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
     }
   };
 
@@ -168,7 +173,15 @@ export function StudentForm({
       }
     }
 
-    setErrors(prev => ({ ...prev, [field]: err }));
+    setErrors(prev => {
+      const next = { ...prev };
+      if (err) {
+        next[field] = err;
+      } else {
+        delete next[field];
+      }
+      return next;
+    });
     return !err;
   };
 
@@ -201,7 +214,15 @@ export function StudentForm({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!validateAll()) {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setTimeout(() => {
+        const errorInput = document.querySelector('.border-red-500, input:invalid') as HTMLElement;
+        if (errorInput) {
+          errorInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          errorInput.focus?.();
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 50);
       return;
     }
     const cleanedData = {

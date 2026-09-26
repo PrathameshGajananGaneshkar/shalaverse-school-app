@@ -201,12 +201,12 @@ export function Dashboard() {
           subtitle={language === 'mr' ? 'T.C., बोनाफाईड व निर्गम उतारे' : 'T.C. & Bonafide Issued'}
           icon={<FileText className="w-6 h-6" />}
           color="purple"
-          onClick={() => navigate('/documents')}
+          onClick={() => navigate('/documents?filter=issued')}
         />
         <StatCard
           title={t('activeClasses')}
           value={Object.keys(classCounts).length}
-          subtitle={language === 'mr' ? 'इयत्ता ५ वी ते १२ वी' : 'Classes 5th to 12th'}
+          subtitle={language === 'mr' ? 'वर्गनिहाय पटसंख्या अहवाल' : 'Class Strength Reports'}
           icon={<School className="w-6 h-6" />}
           color="amber"
           onClick={() => navigate('/reports')}

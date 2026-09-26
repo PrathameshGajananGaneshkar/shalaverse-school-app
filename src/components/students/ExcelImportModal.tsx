@@ -190,6 +190,8 @@ export function ExcelImportModal({
     mapping['caste'] = findIdx(['caste', 'category', 'जात', 'प्रवर्ग']);
     mapping['uid'] = findIdx(['uid', 'aadhaar', 'aadhar', 'आधारकार्ड', 'आधारनंबर', 'आधार']);
     mapping['address'] = findIdx(['address', 'पत्ता', 'रहिवासीपत्ता', 'गाव']);
+    mapping['birthPlace'] = findIdx(['birthplace', 'placeofbirth', 'जन्मस्थळ', 'जन्मठिकाण', 'जन्मगाव']);
+    mapping['previousSchool'] = findIdx(['previousschool', 'lastschool', 'मागीलशाळा', 'पूर्वीचीशाळा']);
 
     setColumnMapping(mapping);
     generateStudentsFromMatrix(matrix, bestRowIdx, mapping);
@@ -239,7 +241,7 @@ export function ExcelImportModal({
         admissionYear: getVal('admissionYear') || '2025-2026',
         admissionDate: getVal('admissionDate') || '2025-06-16',
         birthDate: rawDob,
-        birthPlace: 'चिखली',
+        birthPlace: getVal('birthPlace') || '',
         nationality: 'Indian (भारतीय)',
         motherTongue: 'मराठी',
         religion: 'Hindu (हिंदू)',
@@ -247,8 +249,8 @@ export function ExcelImportModal({
         subCaste: '',
         uid: getVal('uid').replace(/[^0-9]/g, ''),
         mobile: getVal('mobile').replace(/[^0-9]/g, ''),
-        address: getVal('address') || 'मु. पो. चिखली, ता. चिखली, जि. बुलढाणा',
-        previousSchool: 'जि. प. प्राथमिक शाळा',
+        address: getVal('address') || '',
+        previousSchool: getVal('previousSchool') || '',
         academicProgress: 'Good (चांगली)',
         behaviour: 'Good (उत्तम)',
         leavingReason: '',

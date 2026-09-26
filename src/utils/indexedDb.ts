@@ -99,6 +99,22 @@ export async function idbClearStudents(): Promise<void> {
   }
 }
 
+export async function idbPutStudent(student: Student): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      store.put(student);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+      transaction.onabort = () => reject(new Error('IDB transaction aborted'));
+    });
+  } catch (err) {
+    console.warn('idbPutStudent error:', err);
+  }
+}
+
 export async function idbDeleteStudent(id: string, grNumber?: string): Promise<void> {
   try {
     const db = await getIndexedDB();

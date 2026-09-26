@@ -303,7 +303,7 @@ export function parseExcelOrCSVToStudents(data: ArrayBuffer | string): Partial<S
       
       const admissionDate = admDateIdx >= 0 ? parseAnyDateToISO(row[admDateIdx], 2025) : '2025-06-16';
       const birthDate = dobIdx >= 0 ? parseAnyDateToISO(row[dobIdx], 2015) : '2015-05-10';
-      const birthPlace = birthPlaceIdx >= 0 && getCellVal(birthPlaceIdx) ? getCellVal(birthPlaceIdx) : 'चिखली';
+      const birthPlace = birthPlaceIdx >= 0 && getCellVal(birthPlaceIdx) ? getCellVal(birthPlaceIdx) : '';
       const nationality = nationalityIdx >= 0 && getCellVal(nationalityIdx) ? getCellVal(nationalityIdx) : 'Indian (भारतीय)';
       const motherTongue = motherTongueIdx >= 0 && getCellVal(motherTongueIdx) ? getCellVal(motherTongueIdx) : 'मराठी';
       const religion = religionIdx >= 0 && getCellVal(religionIdx) ? getCellVal(religionIdx) : 'Hindu (हिंदू)';
@@ -311,8 +311,8 @@ export function parseExcelOrCSVToStudents(data: ArrayBuffer | string): Partial<S
       const subCaste = subCasteIdx >= 0 ? getCellVal(subCasteIdx) : '';
       const uid = uidIdx >= 0 ? getCellVal(uidIdx).replace(/[^0-9]/g, '') : '';
       const mobile = mobileIdx >= 0 ? getCellVal(mobileIdx).replace(/[^0-9]/g, '') : '';
-      const address = addressIdx >= 0 && getCellVal(addressIdx) ? getCellVal(addressIdx) : 'मु. पो. चिखली, ता. चिखली, जि. बुलढाणा';
-      const previousSchool = prevSchoolIdx >= 0 && getCellVal(prevSchoolIdx) ? getCellVal(prevSchoolIdx) : 'जि. प. प्राथमिक शाळा';
+      const address = addressIdx >= 0 && getCellVal(addressIdx) ? getCellVal(addressIdx) : '';
+      const previousSchool = prevSchoolIdx >= 0 && getCellVal(prevSchoolIdx) ? getCellVal(prevSchoolIdx) : '';
       const academicProgress = progressIdx >= 0 && getCellVal(progressIdx) ? getCellVal(progressIdx) : 'Good (चांगली)';
       const behaviour = behaviourIdx >= 0 && getCellVal(behaviourIdx) ? getCellVal(behaviourIdx) : 'Good (उत्तम)';
       const leavingReason = reasonIdx >= 0 ? getCellVal(reasonIdx) : '';

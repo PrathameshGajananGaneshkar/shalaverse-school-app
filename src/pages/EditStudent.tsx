@@ -16,6 +16,7 @@ export function EditStudent() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadStudent() {
@@ -36,15 +37,16 @@ export function EditStudent() {
   const handleSubmit = async (data: Omit<Student, 'id'>) => {
     if (!id) return;
     setSaving(true);
+    setErrorMessage(null);
     try {
       await studentService.updateStudent(id, data);
       setSuccessMessage(true);
       setTimeout(() => {
         navigate('/students');
-      }, 1200);
-    } catch (err) {
+      }, 1000);
+    } catch (err: any) {
       console.error('Failed to update student:', err);
-      alert('Error updating student. Please try again.');
+      setErrorMessage(err?.message || 'Error updating student. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -105,6 +107,12 @@ export function EditStudent() {
           </div>
         )}
       </div>
+
+      {errorMessage && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 text-sm font-medium">
+          {errorMessage}
+        </div>
+      )}
 
       <StudentForm
         initialData={student}

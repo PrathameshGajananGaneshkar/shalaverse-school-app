@@ -4,6 +4,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -22,7 +23,8 @@ import {
   idbGetAllStudents,
   idbSaveAllStudents,
   idbClearStudents,
-  idbDeleteStudent
+  idbDeleteStudent,
+  idbPutStudent
 } from '../utils/indexedDb';
 import {
   isFirestoreQuotaExceeded,
@@ -33,7 +35,19 @@ import {
 const COLLECTION_NAME = 'students';
 const LOCAL_STORAGE_KEY = 'shalaverse_students_cache';
 
-const VALID_SCHOOL_CLASSES: AdmissionClass[] = ['5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'];
+const VALID_SCHOOL_CLASSES: AdmissionClass[] = [
+  '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
+];
+
+function cleanFirestoreData<T extends Record<string, any>>(obj: T): Partial<T> {
+  const cleaned: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      cleaned[key] = val;
+    }
+  }
+  return cleaned;
+}
 
 /**
  * Ensures all students belong to the school's active 5th to 12th classes.
@@ -211,41 +225,75 @@ export const studentService = {
 
   // Add new student
   async addStudent(studentData: Omit<Student, 'id'>): Promise<string> {
+    // Reset any previous cleared flag since a student is being actively added
+    localStorage.removeItem('shalaverse_cleared_at');
+
     const finalStudentId = (studentData.studentId && studentData.studentId.trim()) 
       ? studentData.studentId.trim() 
       : generateStudentId(studentData.grNumber, studentData.admissionYear);
 
-    const studentPayload = {
+    const studentPayload: Omit<Student, 'id'> = {
       ...studentData,
       studentId: finalStudentId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
-    let newDocId = `stu_${Date.now()}`;
-    if (!isFirestoreQuotaExceeded()) {
-      try {
-        const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-          ...studentPayload,
-          serverCreatedAt: serverTimestamp()
-        });
-        newDocId = docRef.id;
-      } catch (err) {
-        if (isQuotaExceededError(err)) {
-          recordQuotaExceeded();
-        }
-        console.warn('Firestore write failed, saving to local state:', err);
+    // Generate reliable doc ID upfront so Firestore and IndexedDB match 100%
+    let newDocId = `stu_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    try {
+      const generatedRef = doc(collection(db, COLLECTION_NAME));
+      if (generatedRef && generatedRef.id) {
+        newDocId = generatedRef.id;
       }
+    } catch {
+      // fallback to generated ID
     }
 
-    // Update local cache
-    const current = await this.getAllStudents();
     const newStudent: Student = {
       ...studentPayload,
       id: newDocId
     };
+
+    // 1. Immediately update local cache & IndexedDB so the student appears instantly across the website!
+    const current = await this.getAllStudents();
     const updated = [newStudent, ...current.filter(s => s.id !== newDocId && s.grNumber !== studentPayload.grNumber)];
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated));
+    
+    // Sort by GR Number
+    updated.sort((a, b) => {
+      const grA = parseInt(a.grNumber || '0', 10);
+      const grB = parseInt(b.grNumber || '0', 10);
+      if (!isNaN(grA) && !isNaN(grB) && grA !== grB) {
+        return grA - grB;
+      }
+      return (a.grNumber || '').localeCompare(b.grNumber || '');
+    });
+
+    // Save to IndexedDB (CRITICAL: enables all screens to immediately read this student)
+    await idbSaveAllStudents(updated);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updated.slice(0, 300)));
+    } catch {}
+
+    // 2. Persist to Firestore with non-blocking timeout guard so network lags/errors do not stall the app
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const firestoreData = cleanFirestoreData({
+          ...studentPayload,
+          serverCreatedAt: serverTimestamp()
+        });
+        const docRef = doc(db, COLLECTION_NAME, newDocId);
+        await Promise.race([
+          setDoc(docRef, firestoreData),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore timeout')), 3000))
+        ]);
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Firestore write delayed or failed, preserved in local storage:', err);
+      }
+    }
 
     return newDocId;
   },
@@ -257,33 +305,34 @@ export const studentService = {
       updatedAt: new Date().toISOString()
     };
 
+    // 1. Immediately update IndexedDB and localStorage
+    const current = await this.getAllStudents();
+    const index = current.findIndex(s => s.id === id || s.studentId === updates.studentId || (updates.grNumber && s.grNumber === updates.grNumber));
+    if (index !== -1) {
+      current[index] = { ...current[index], ...updatedPayload };
+      await idbSaveAllStudents(current);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(current.slice(0, 300)));
+      } catch {}
+    }
+
+    // 2. Persist to Firestore with non-blocking timeout
     if (!isFirestoreQuotaExceeded()) {
       try {
-        const docRef = doc(db, COLLECTION_NAME, id);
-        await updateDoc(docRef, {
+        const firestoreData = cleanFirestoreData({
           ...updatedPayload,
           serverUpdatedAt: serverTimestamp()
         });
+        const docRef = doc(db, COLLECTION_NAME, id);
+        await Promise.race([
+          updateDoc(docRef, firestoreData),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+        ]);
       } catch (err) {
         if (isQuotaExceededError(err)) {
           recordQuotaExceeded();
         }
-        console.warn('Firestore update failed, updating local state:', err);
-      }
-    }
-
-    // Update local cache
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (cached) {
-      try {
-        const list: Student[] = JSON.parse(cached);
-        const index = list.findIndex(s => s.id === id || s.studentId === updates.studentId || (updates.grNumber && s.grNumber === updates.grNumber));
-        if (index !== -1) {
-          list[index] = { ...list[index], ...updatedPayload };
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
-        }
-      } catch {
-        // ignore
+        console.warn('Firestore update delayed or failed, preserved in local state:', err);
       }
     }
   },
