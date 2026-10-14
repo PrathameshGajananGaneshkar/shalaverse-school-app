@@ -21,6 +21,7 @@ import { Modal } from '../common/Modal';
 import { Badge } from '../common/Badge';
 import { formatDate } from '../../utils/dateUtils';
 import { useLanguage } from '../../context/LanguageContext';
+import { getStudentGender, getGenderLabel } from '../../utils/genderUtils';
 
 interface StudentViewModalProps {
   student: Student | null;
@@ -199,6 +200,13 @@ export function StudentViewModal({
               <div>
                 <span className="text-slate-500 block">{language === 'mr' ? 'जन्मतारीख:' : 'Date of Birth (DOB):'}</span>
                 <span className="font-semibold text-slate-800">{formatDate(student.birthDate)}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block">{language === 'mr' ? 'लिंग (Gender):' : 'Gender:'}</span>
+                <span className="inline-flex items-center gap-1 font-bold text-slate-800">
+                  <span>{getStudentGender(student) === 'Female' ? '👧' : '👦'}</span>
+                  <span>{getGenderLabel(getStudentGender(student), language)}</span>
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block">{language === 'mr' ? 'जन्मस्थळ:' : 'Birth Place:'}</span>

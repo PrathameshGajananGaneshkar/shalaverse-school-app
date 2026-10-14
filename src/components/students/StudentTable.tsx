@@ -3,6 +3,7 @@ import { Eye, Edit3, Trash2, UserPlus, ChevronLeft, ChevronRight, ChevronsLeft, 
 import { Student } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
 import { Badge } from '../common/Badge';
+import { getStudentGender, getGenderLabel } from '../../utils/genderUtils';
 
 interface StudentTableProps {
   students: Student[];
@@ -132,9 +133,18 @@ export function StudentTable({
                 {/* Student Name & Father's Name */}
                 <td className="py-3.5 px-4 sm:px-6">
                   <div>
-                    <span className="font-bold text-slate-900 block leading-tight">
-                      {student.studentName}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-bold text-slate-900 leading-tight">
+                        {student.studentName}
+                      </span>
+                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                        getStudentGender(student) === 'Female'
+                          ? 'bg-pink-50 text-pink-700 border border-pink-200'
+                          : 'bg-blue-50 text-blue-700 border border-blue-200'
+                      }`}>
+                        {getStudentGender(student) === 'Female' ? '👧 मुलगी' : '👦 मुलगा'}
+                      </span>
+                    </div>
                     {student.fatherName && (
                       <span className="text-xs text-slate-500 block mt-0.5">
                         {language === 'mr' ? 'पालक: ' : 'S/O / D/O: '}{student.fatherName}

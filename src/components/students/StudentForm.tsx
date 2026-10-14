@@ -18,6 +18,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useSettings } from '../../context/SettingsContext';
 import { transliterateToDevanagari, deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
 import { generateStudentId } from '../../utils/studentIdGenerator';
+import { getStudentGender } from '../../utils/genderUtils';
 
 interface StudentFormProps {
   key?: string | number;
@@ -47,6 +48,8 @@ export function StudentForm({
 
     studentName: initialData?.studentName || '',
     studentNameLocal: initialData?.studentNameLocal || '',
+    gender: initialData?.gender || (initialData?.studentName ? getStudentGender(initialData) : 'Male'),
+    genderLocal: initialData?.genderLocal || (initialData?.gender === 'Female' ? 'मुलगी' : 'मुलगा'),
     fatherName: initialData?.fatherName || '',
     fatherNameLocal: initialData?.fatherNameLocal || '',
     motherName: initialData?.motherName || '',
@@ -97,6 +100,11 @@ export function StudentForm({
       // Auto-suggest local field if local is empty and user types English
       if (field === 'studentName' && !prev.studentNameLocal) {
         updated.studentNameLocal = transliterateToDevanagari(value);
+      }
+      if (field === 'studentName' && !initialData?.gender) {
+        const detected = getStudentGender({ studentName: value, studentNameLocal: updated.studentNameLocal });
+        updated.gender = detected;
+        updated.genderLocal = detected === 'Female' ? 'मुलगी' : 'मुलगा';
       }
       if (field === 'fatherName' && !prev.fatherNameLocal) {
         updated.fatherNameLocal = transliterateToDevanagari(value);
@@ -522,6 +530,51 @@ export function StudentForm({
               className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-sm focus:bg-white focus:ring-blue-600"
             />
             {errors.birthDate && <p className="text-xs text-red-600 mt-1">{errors.birthDate}</p>}
+          </div>
+
+          {/* Gender / लिंग */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+              <span>विद्यार्थ्याचे लिंग (Gender) <span className="text-red-500">*</span></span>
+              <span className="text-[11px] font-bold text-blue-800">
+                {formData.gender === 'Female' ? '👧 मुलगी' : '👦 मुलगा'}
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                id="btn-gender-male"
+                onClick={() => {
+                  handleChange('gender', 'Male');
+                  handleChange('genderLocal', 'मुलगा');
+                }}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  formData.gender !== 'Female'
+                    ? 'bg-blue-600 border-blue-700 text-white shadow-xs'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>👦</span>
+                <span>{language === 'mr' ? 'मुलगा (Boy)' : 'Boy (Male)'}</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn-gender-female"
+                onClick={() => {
+                  handleChange('gender', 'Female');
+                  handleChange('genderLocal', 'मुलगी');
+                }}
+                className={`py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                  formData.gender === 'Female'
+                    ? 'bg-pink-600 border-pink-700 text-white shadow-xs'
+                    : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                <span>👧</span>
+                <span>{language === 'mr' ? 'मुलगी (Girl)' : 'Girl (Female)'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Birth Place */}

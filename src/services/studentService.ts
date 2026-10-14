@@ -35,6 +35,46 @@ import {
 const COLLECTION_NAME = 'students';
 const LOCAL_STORAGE_KEY = 'shalaverse_students_cache';
 
+const DEMO_GR_SET = new Set(['4120', '4121', '4122', '3980', '3995', '3810']);
+const DEMO_STU_IDS = new Set([
+  'STU-2026-001', 'STU-2026-002', 'STU-2026-003',
+  'STU-2025-014', 'STU-2025-025', 'STU-2024-008'
+]);
+const DEMO_NAMES = new Set([
+  'deshmukh prathamesh rajesh',
+  'देशमुख प्रथमेश राजेश',
+  'patil ananya sunil',
+  'पाटील अनन्या सुनील',
+  'joshi aditya prasad',
+  'जोशी आदित्य प्रसाद',
+  'shinde rohan prakash',
+  'शिंदे रोहन प्रकाश',
+  'khan ayesha mohammed',
+  'खान आयशा मोहम्मद',
+  'gaikwad tanvi santosh',
+  'गायकवाड तन्वी संतोष'
+]);
+
+export function isDemoStudent(s: Partial<Student> | null | undefined): boolean {
+  if (!s) return false;
+  if (typeof s.id === 'string' && (s.id.startsWith('sample-') || s.id.startsWith('local-sample-'))) {
+    return true;
+  }
+  if (s.grNumber && DEMO_GR_SET.has(String(s.grNumber).trim())) {
+    return true;
+  }
+  if (s.studentId && DEMO_STU_IDS.has(String(s.studentId).trim())) {
+    return true;
+  }
+  if (s.studentName && DEMO_NAMES.has(s.studentName.trim().toLowerCase())) {
+    return true;
+  }
+  if (s.studentNameLocal && DEMO_NAMES.has(s.studentNameLocal.trim().toLowerCase())) {
+    return true;
+  }
+  return false;
+}
+
 const VALID_SCHOOL_CLASSES: AdmissionClass[] = [
   '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
 ];
@@ -92,16 +132,29 @@ function sanitizeStudentClasses(rawStudents: Student[]): Student[] {
 export const studentService = {
   // Get all students from Firestore / IndexedDB with ultra-fast responsiveness
   async getAllStudents(): Promise<Student[]> {
+    // Proactively purge legacy demo students in background if not already marked purged
+    if (typeof window !== 'undefined' && localStorage.getItem('shalaverse_demo_purged_permanently') !== 'true') {
+      void this.purgeAllDemoStudentsForever().catch(() => {});
+    }
+
     const isCleared = typeof window !== 'undefined' ? localStorage.getItem('shalaverse_cleared_at') : null;
 
     // 1. Fast path: load from IndexedDB first (< 10ms)
     const idbStudents = await idbGetAllStudents();
-    if (idbStudents.length > 0) {
+    const cleanIdbStudents = idbStudents.filter(s => !isDemoStudent(s));
+
+    if (cleanIdbStudents.length !== idbStudents.length) {
+      // Detected demo records in IndexedDB -> immediately save cleaned version and run purge
+      await idbSaveAllStudents(cleanIdbStudents);
+      void this.purgeAllDemoStudentsForever().catch(() => {});
+    }
+
+    if (cleanIdbStudents.length > 0) {
       if (isCleared) {
         localStorage.removeItem('shalaverse_cleared_at');
       }
-      const sanitizedIdb = sanitizeStudentClasses(idbStudents);
-      if (sanitizedIdb !== idbStudents) {
+      const sanitizedIdb = sanitizeStudentClasses(cleanIdbStudents);
+      if (sanitizedIdb !== cleanIdbStudents) {
         idbSaveAllStudents(sanitizedIdb).catch(() => {});
       }
       // Sort by GR Number
@@ -128,10 +181,19 @@ export const studentService = {
       const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
       
       if (snapshot && !snapshot.empty) {
-        const students: Student[] = snapshot.docs.map((d: any) => ({
-          id: d.id,
-          ...(d.data() as Omit<Student, 'id'>)
-        }));
+        const rawDocs = snapshot.docs;
+        const demoDocs = rawDocs.filter((d: any) => isDemoStudent({ id: d.id, ...d.data() }));
+        if (demoDocs.length > 0) {
+          // Delete demo docs from Firestore immediately in background
+          void this.purgeAllDemoStudentsForever().catch(() => {});
+        }
+
+        const students: Student[] = rawDocs
+          .map((d: any) => ({
+            id: d.id,
+            ...(d.data() as Omit<Student, 'id'>)
+          }))
+          .filter((s: Student) => !isDemoStudent(s));
 
         const sanitizedStudents = sanitizeStudentClasses(students);
 
@@ -151,14 +213,11 @@ export const studentService = {
         } catch {}
         return sanitizedStudents;
       } else if (snapshot && snapshot.empty) {
-        const hasInitialized = localStorage.getItem('shalaverse_initialized_v2');
-        if (hasInitialized) {
-          await idbClearStudents();
-          try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
-          } catch {}
-          return [];
-        }
+        await idbClearStudents();
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
+        } catch {}
+        return [];
       }
     } catch (err) {
       console.warn('Firestore fetch failed, checking local cache:', err);
@@ -169,25 +228,19 @@ export const studentService = {
     if (cached !== null) {
       try {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          await idbSaveAllStudents(parsed);
-          return parsed;
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((s: any) => !isDemoStudent(s));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
+          }
+          if (cleaned.length > 0) {
+            await idbSaveAllStudents(cleaned);
+            return cleaned;
+          }
         }
       } catch {
         // ignore parse error
       }
-    }
-
-    // Only for the very first fresh initial open if nothing was ever initialized
-    const hasInitialized = localStorage.getItem('shalaverse_initialized_v2');
-    if (!hasInitialized) {
-      localStorage.setItem('shalaverse_initialized_v2', 'true');
-      const samples = INITIAL_SAMPLE_STUDENTS.map((s, idx) => ({
-        ...s,
-        id: `sample-${idx + 1}`
-      }));
-      await idbSaveAllStudents(samples);
-      return samples;
     }
 
     return [];
@@ -539,107 +592,99 @@ export const studentService = {
     return { deleted: totalEstimate, cancelled: Boolean(cancellationToken?.isCancelled) };
   },
 
-  // Reset all student data to the original clean sample state
+  // Permanently purge all demo / sample student records from Firestore, IndexedDB, and localStorage
+  async purgeAllDemoStudentsForever(): Promise<{ deleted: number }> {
+    let deletedCount = 0;
+    try {
+      // 1. Purge from IndexedDB
+      const idbList = await idbGetAllStudents();
+      const demoFromIdb = idbList.filter(isDemoStudent);
+      if (demoFromIdb.length > 0) {
+        const cleaned = idbList.filter(s => !isDemoStudent(s));
+        await idbSaveAllStudents(cleaned);
+        deletedCount += demoFromIdb.length;
+      }
+
+      // 2. Purge from localStorage
+      const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const cleanedLocal = parsed.filter((s: any) => !isDemoStudent(s));
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanedLocal));
+          }
+        } catch {}
+      }
+
+      // 3. Purge from Firestore
+      if (!isFirestoreQuotaExceeded()) {
+        try {
+          const snapshot = await getDocs(collection(db, COLLECTION_NAME));
+          if (!snapshot.empty) {
+            const batch = writeBatch(db);
+            let firestoreDeletes = 0;
+            snapshot.docs.forEach(docSnap => {
+              const data = docSnap.data();
+              if (
+                docSnap.id.startsWith('sample-') ||
+                docSnap.id.startsWith('local-sample-') ||
+                isDemoStudent({ id: docSnap.id, ...data })
+              ) {
+                batch.delete(docSnap.ref);
+                firestoreDeletes++;
+              }
+            });
+
+            if (firestoreDeletes > 0) {
+              await batch.commit().catch(() => {});
+              deletedCount += firestoreDeletes;
+            }
+          }
+        } catch (fErr) {
+          console.warn('Firestore demo purge error:', fErr);
+        }
+      }
+
+      // 4. Also delete document logs for demo students
+      for (const gr of DEMO_GR_SET) {
+        await documentService.deleteLogsByStudent('', gr).catch(() => {});
+      }
+      for (const sid of DEMO_STU_IDS) {
+        await documentService.deleteLogsByStudent(sid).catch(() => {});
+      }
+
+      localStorage.setItem('shalaverse_demo_purged_permanently', 'true');
+    } catch (err) {
+      console.warn('purgeAllDemoStudentsForever error:', err);
+    }
+    return { deleted: deletedCount };
+  },
+
+  // Reset student data
   async resetToOriginalSchoolData(): Promise<{ restored: number }> {
     try {
+      await this.purgeAllDemoStudentsForever();
       await idbClearStudents();
       try {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
       } catch {}
-
-      // Fast residual delete with timeout
-      try {
-        const q = query(collection(db, COLLECTION_NAME), limit(400));
-        const snap = await Promise.race([
-          getDocs(q),
-          new Promise<null>((r) => setTimeout(() => r(null), 3000))
-        ]);
-        if (snap && !(snap as any).empty) {
-          const batch = writeBatch(db);
-          (snap as any).docs.forEach((d: any) => batch.delete(d.ref));
-          await Promise.race([
-            batch.commit(),
-            new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Reset batch delete timeout')), 3000))
-          ]).catch(() => {});
-        }
-      } catch {}
-
-      // Re-seed initial sample students to Firestore
-      const newBatch = writeBatch(db);
-      const initialStudents: Student[] = [];
-
-      INITIAL_SAMPLE_STUDENTS.forEach((sample) => {
-        const docRef = doc(collection(db, COLLECTION_NAME));
-        const studentObj: Student = {
-          ...sample,
-          id: docRef.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        newBatch.set(docRef, {
-          ...studentObj,
-          serverCreatedAt: serverTimestamp()
-        });
-        initialStudents.push(studentObj);
-      });
-
-      await Promise.race([
-        newBatch.commit(),
-        new Promise<void>((_, reject) => setTimeout(() => reject(new Error('Reset batch set timeout')), 3000))
-      ]).catch(() => {});
-
-      await idbSaveAllStudents(initialStudents);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(initialStudents));
-      return { restored: initialStudents.length };
+      return { restored: 0 };
     } catch (err) {
-      console.warn('Firestore reset error, using local fallback:', err);
-      const defaultSamples: Student[] = INITIAL_SAMPLE_STUDENTS.map((s, idx) => ({
-        ...s,
-        id: `sample-${idx + 1}`
-      }));
-      await idbSaveAllStudents(defaultSamples);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(defaultSamples));
-      return { restored: defaultSamples.length };
+      console.warn('resetToOriginalSchoolData error:', err);
+      return { restored: 0 };
     }
   },
 
   // Clear all sample / demo students
   async clearSampleStudents(): Promise<{ deleted: number }> {
-    let deleted = 0;
-    const current = await this.getAllStudents();
-    const sampleIds = current
-      .filter(s => s.id.startsWith('sample-') || s.id.startsWith('local-sample-') || s.studentId.startsWith('STU-2026-00') || s.studentId.startsWith('STU-2025-0') || s.studentId.startsWith('STU-2024-0'))
-      .map(s => s.id);
-
-    for (const sid of sampleIds) {
-      try {
-        await this.deleteStudent(sid);
-        deleted++;
-      } catch {
-        // ignore
-      }
-    }
-
-    const remaining = (await this.getAllStudents()).filter(s => !sampleIds.includes(s.id));
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remaining));
-    return { deleted };
+    return await this.purgeAllDemoStudentsForever();
   },
 
-  // Seed sample data into Firestore if empty
+  // Seed sample data - permanently disabled per user instructions
   async seedInitialData(): Promise<void> {
-    try {
-      for (const sample of INITIAL_SAMPLE_STUDENTS) {
-        await addDoc(collection(db, COLLECTION_NAME), {
-          ...sample,
-          serverCreatedAt: serverTimestamp()
-        });
-      }
-      // Refresh local cache
-      const refreshed = await this.getAllStudents();
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(refreshed));
-    } catch (err) {
-      console.error('Seed initial data error:', err);
-    }
+    // Demo data permanently removed. This is a no-op.
+    await this.purgeAllDemoStudentsForever();
   },
 
   // Restore & Import bulk students data (supports 100, 500, 1000, 10000+ students within seconds)
@@ -668,29 +713,30 @@ export const studentService = {
       const studentName = String(dataWithoutId.studentName || '').trim() || `विद्यार्थी ${idx + 1}`;
       
       const payload: Omit<Student, 'id'> = {
+        fatherName: '',
+        motherName: '',
+        admissionClass: '5th',
+        admissionYear: '2025-2026',
+        admissionDate: '2025-06-16',
+        birthDate: '2015-05-10',
+        birthPlace: '',
+        nationality: 'Indian (भारतीय)',
+        motherTongue: 'मराठी',
+        religion: 'Hindu (हिंदू)',
+        caste: '',
+        subCaste: '',
+        uid: '',
+        mobile: '',
+        address: '',
+        previousSchool: '',
+        academicProgress: 'Good',
+        behaviour: 'Good',
+        leavingReason: '',
+        certificateDate: '',
+        ...dataWithoutId,
         grNumber,
         studentId: dataWithoutId.studentId || `20252704020${(100 + idx + 1).toString().padStart(4, '0')}`,
         studentName,
-        fatherName: dataWithoutId.fatherName || '',
-        motherName: dataWithoutId.motherName || '',
-        admissionClass: dataWithoutId.admissionClass || '5th',
-        admissionYear: dataWithoutId.admissionYear || '2025-2026',
-        admissionDate: dataWithoutId.admissionDate || '2025-06-16',
-        birthDate: dataWithoutId.birthDate || '2015-05-10',
-        birthPlace: dataWithoutId.birthPlace || '',
-        nationality: dataWithoutId.nationality || 'Indian (भारतीय)',
-        motherTongue: dataWithoutId.motherTongue || 'मराठी',
-        religion: dataWithoutId.religion || 'Hindu (हिंदू)',
-        caste: dataWithoutId.caste || '',
-        subCaste: dataWithoutId.subCaste || '',
-        uid: dataWithoutId.uid || '',
-        mobile: dataWithoutId.mobile || '',
-        address: dataWithoutId.address || '',
-        previousSchool: dataWithoutId.previousSchool || '',
-        academicProgress: dataWithoutId.academicProgress || 'Good',
-        behaviour: dataWithoutId.behaviour || 'Good',
-        leavingReason: dataWithoutId.leavingReason || '',
-        certificateDate: dataWithoutId.certificateDate || '',
         createdAt: dataWithoutId.createdAt || nowIso,
         updatedAt: nowIso
       };

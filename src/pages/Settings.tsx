@@ -1,4 +1,4 @@
-import { useState, FormEvent, useEffect, ChangeEvent } from 'react';
+import { useState, FormEvent, useEffect, ChangeEvent, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Settings as SettingsIcon, 
@@ -8,8 +8,6 @@ import {
   CheckCircle2, 
   Upload, 
   Download, 
-  RefreshCw,
-  Sparkles,
   HelpCircle,
   FileCode,
   Lock,
@@ -19,14 +17,18 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  Trash2
+  Loader2,
+  AlertCircle,
+  X,
+  FileCheck2,
+  RefreshCw
 } from 'lucide-react';
 import { useSettings } from '../context/SettingsContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { SchoolSettings } from '../types';
-import { migrateLegacyData, MigrationResult } from '../utils/migration';
 import { studentService } from '../services/studentService';
+import { documentService } from '../services/documentService';
 import { authCredentialsService, AuthCredentials } from '../services/authCredentialsService';
 
 export function Settings() {
@@ -50,6 +52,24 @@ export function Settings() {
   const [savingCreds, setSavingCreds] = useState(false);
   const [credsSuccess, setCredsSuccess] = useState(false);
 
+  // Backup & Restore State
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportNotice, setExportNotice] = useState<{ count: number; docsCount: number; filename: string; fallbackUrl?: string } | null>(null);
+
+  // Restore Modal State
+  const [restoreModalOpen, setRestoreModalOpen] = useState(false);
+  const [restorePendingData, setRestorePendingData] = useState<{
+    fileName: string;
+    students: any[];
+    documentLogs: any[];
+    schoolSettings: any | null;
+  } | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<{ current: number; total: number } | null>(null);
+  const [restoreResult, setRestoreResult] = useState<{ success: boolean; added: number; docsCount: number; message: string } | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     getCredentials().then(creds => {
       if (creds) {
@@ -60,11 +80,6 @@ export function Settings() {
       }
     }).catch(() => {});
   }, [getCredentials]);
-
-  // Migration status
-  const [migrationStatus, setMigrationStatus] = useState<MigrationResult | null>(null);
-  const [isMigrating, setIsMigrating] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   const handleChange = (field: keyof SchoolSettings, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -108,107 +123,188 @@ export function Settings() {
     }
   };
 
-  const handleRunMigration = async () => {
-    setIsMigrating(true);
-    try {
-      const res = await migrateLegacyData();
-      setMigrationStatus(res);
-    } catch (err) {
-      console.error('Migration error:', err);
-    } finally {
-      setIsMigrating(false);
-    }
-  };
-
-  const handleSeedData = async () => {
-    if (!confirm('This will insert standard sample student records into the Firestore database. Continue?')) {
-      return;
-    }
-    setIsSeeding(true);
-    try {
-      await studentService.seedInitialData();
-      alert('Sample records seeded into Firestore successfully!');
-    } catch (err) {
-      console.error('Seed error:', err);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
-  const handleClearDemoData = async () => {
-    if (!confirm('सर्व नमुना (Sample / Demo) विद्यार्थी डेटा डिलीट करून फक्त तुमचे स्वतःचे विद्यार्थी ठेवायचे आहेत का?')) {
-      return;
-    }
-    setIsSeeding(true);
-    try {
-      const res = await studentService.clearSampleStudents();
-      alert(`यशस्वी! ${res.deleted} नमुना विद्यार्थी रेकॉर्ड्स हटवले गेले आहेत.`);
-      window.location.reload();
-    } catch (err) {
-      console.error('Clear demo error:', err);
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   const handleExportBackup = async () => {
-    const students = await studentService.getAllStudents();
-    const backupData = {
-      exportedAt: new Date().toISOString(),
-      schoolSettings: settings,
-      studentsCount: students.length,
-      students: students
-    };
+    setIsExporting(true);
+    setExportNotice(null);
+    try {
+      // 1. Fetch all real students
+      const students = await studentService.getAllStudents();
+      // 2. Fetch all document logs (TC, Nirgam, Bonafide certificates)
+      const documentLogs = await documentService.getDocumentLogs();
 
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ShalaVerse_Complete_Backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const schoolSafeName = (settings.schoolName || 'School')
+        .replace(/[^a-zA-Z0-9_\u0900-\u097F]/g, '_')
+        .replace(/_+/g, '_')
+        .substring(0, 30);
+      const todayDate = new Date().toISOString().split('T')[0];
+      const filename = `ShalaVerse_Backup_${schoolSafeName}_${todayDate}.json`;
+
+      const backupData = {
+        app: 'ShalaVerse',
+        version: '2.0',
+        exportedAt: new Date().toISOString(),
+        schoolSettings: settings,
+        studentsCount: students.length,
+        documentsCount: documentLogs.length,
+        students: students,
+        documentLogs: documentLogs
+      };
+
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+
+      // Delay cleanup so browser download stream initiates safely
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+        } catch {}
+      }, 1500);
+
+      setExportNotice({
+        count: students.length,
+        docsCount: documentLogs.length,
+        filename,
+        fallbackUrl: url
+      });
+    } catch (err: any) {
+      console.error('Export failed:', err);
+      alert('बॅकअप डाऊनलोड करताना त्रुटी आली: ' + (err?.message || 'अज्ञात त्रुटी'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleOpenRestoreSelector = () => {
+    setRestoreError(null);
+    setRestoreResult(null);
+    setRestorePendingData(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
   };
 
   const handleFileRestore = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setRestoreError(null);
+    setRestoreResult(null);
+    setRestoreProgress(null);
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const text = event.target?.result as string;
-        const parsed = JSON.parse(text);
-
-        let studentList: any[] = [];
-        if (Array.isArray(parsed)) {
-          studentList = parsed;
-        } else if (parsed && Array.isArray(parsed.students)) {
-          studentList = parsed.students;
-          if (parsed.schoolSettings) {
-            await updateSettings(parsed.schoolSettings);
-          }
-        }
-
-        if (studentList.length === 0) {
-          alert('फाईलमध्ये कोणतेही विद्यार्थ्यांचे रेकॉर्ड आढळले नाही.');
+        if (!text || !text.trim()) {
+          setRestoreError('निवडलेली फाईल रिकामी आहे. कृपया योग्य .json फाईल निवडा.');
+          setRestoreModalOpen(true);
           return;
         }
 
-        if (confirm(`या बॅकअप फाईलमधून एकूण ${studentList.length} विद्यार्थ्यांचा डेटा रीस्टोअर (पुनर्प्राप्त) करायचा आहे का?`)) {
-          setIsSeeding(true);
-          const result = await studentService.importBackupData(studentList);
-          alert(`यशस्वी! ${result.added} विद्यार्थ्यांचा डेटा पूर्ववत रीस्टोअर करण्यात आला आहे.`);
-          window.location.reload();
+        const parsed = JSON.parse(text);
+
+        let studentList: any[] = [];
+        let docList: any[] = [];
+        let schoolSettingsData: any = null;
+
+        if (Array.isArray(parsed)) {
+          studentList = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.students)) {
+            studentList = parsed.students;
+          }
+          if (Array.isArray(parsed.documentLogs)) {
+            docList = parsed.documentLogs;
+          }
+          if (parsed.schoolSettings && typeof parsed.schoolSettings === 'object') {
+            schoolSettingsData = parsed.schoolSettings;
+          }
         }
-      } catch (err) {
+
+        if (studentList.length === 0 && docList.length === 0 && !schoolSettingsData) {
+          setRestoreError('या फाईलमध्ये कोणतेही वैध विद्यार्थ्यांचे रेकॉर्ड्स अथवा माहिती आढळली नाही.');
+          setRestoreModalOpen(true);
+          return;
+        }
+
+        setRestorePendingData({
+          fileName: file.name,
+          students: studentList,
+          documentLogs: docList,
+          schoolSettings: schoolSettingsData
+        });
+        setRestoreModalOpen(true);
+      } catch (err: any) {
         console.error('Failed to parse restore file:', err);
-        alert('बॅकअप फाईल वाचताना त्रुटी आली. कृपया योग्य .json बॅकअप फाईल निवडा.');
-      } finally {
-        setIsSeeding(false);
-        e.target.value = '';
+        setRestoreError('बॅकअप फाईल वाचताना त्रुटी आली. कृपया योग्य JSON (.json) बॅकअप फाईल निवडा.');
+        setRestoreModalOpen(true);
       }
     };
+
+    reader.onerror = () => {
+      setRestoreError('फाईल वाचताना समस्या उद्भवली.');
+      setRestoreModalOpen(true);
+    };
+
     reader.readAsText(file);
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!restorePendingData) return;
+    setIsRestoring(true);
+    setRestoreProgress({ current: 0, total: restorePendingData.students.length });
+
+    try {
+      // 1. Restore School settings if available
+      if (restorePendingData.schoolSettings) {
+        await updateSettings(restorePendingData.schoolSettings);
+        setFormData({ ...restorePendingData.schoolSettings });
+      }
+
+      // 2. Restore students
+      let added = 0;
+      if (restorePendingData.students.length > 0) {
+        const result = await studentService.importBackupData(
+          restorePendingData.students,
+          (completed, total) => {
+            setRestoreProgress({ current: completed, total });
+          }
+        );
+        added = result.added;
+      }
+
+      // 3. Restore document logs if present
+      let docsRestored = 0;
+      if (restorePendingData.documentLogs && restorePendingData.documentLogs.length > 0) {
+        docsRestored = await documentService.restoreDocumentLogs(restorePendingData.documentLogs);
+      }
+
+      setRestoreResult({
+        success: true,
+        added,
+        docsCount: docsRestored,
+        message: `${added} विद्यार्थ्यांचा डेटा ${docsRestored > 0 ? `व ${docsRestored} दाखल्यांच्या नोंदी ` : ''}यशस्वीरित्या रीस्टोअर करण्यात आला आहे!`
+      });
+    } catch (err: any) {
+      console.error('Restore error:', err);
+      setRestoreResult({
+        success: false,
+        added: 0,
+        docsCount: 0,
+        message: 'डेटा रीस्टोअर करताना त्रुटी आली: ' + (err?.message || 'अज्ञात त्रुटी')
+      });
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   return (
@@ -616,102 +712,228 @@ export function Settings() {
                 type="button"
                 id="btn-export-backup-json"
                 onClick={handleExportBackup}
-                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0"
+                disabled={isExporting}
+                className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-60 text-white rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 transition cursor-pointer"
               >
-                <Download className="w-4 h-4" />
-                <span>Export Backup (JSON)</span>
+                {isExporting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                <span>
+                  {isExporting 
+                    ? (language === 'mr' ? 'बॅकअप तयार होत आहे...' : 'Exporting...') 
+                    : 'Export Backup (JSON)'}
+                </span>
               </button>
 
-              <label
-                htmlFor="restore-file-input"
-                className="cursor-pointer px-4 py-2 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 transition"
+              <button
+                type="button"
+                id="btn-restore-backup-file"
+                onClick={handleOpenRestoreSelector}
+                className="px-4 py-2 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0 transition cursor-pointer"
               >
                 <Upload className="w-4 h-4 text-emerald-700" />
                 <span>Restore from Backup File</span>
-                <input
-                  id="restore-file-input"
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={handleFileRestore}
-                />
-              </label>
+              </button>
+              <input
+                ref={fileInputRef}
+                id="restore-file-input"
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleFileRestore}
+              />
             </div>
           </div>
 
-          {/* Migration, Seed & Clear Tools */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Migration Tool */}
-            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Upload className="w-4 h-4 text-blue-600" />
-                <span>Migrate Local Storage</span>
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Scan local browser storage for legacy student records and import them into Firestore.
-              </p>
-              <button
-                type="button"
-                id="btn-run-migration"
-                onClick={handleRunMigration}
-                disabled={isMigrating}
-                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isMigrating ? 'animate-spin' : ''}`} />
-                <span>{isMigrating ? 'Migrating...' : 'Run Data Migration'}</span>
-              </button>
-
-              {migrationStatus && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 font-medium">
-                  {migrationStatus.message}
+          {/* Export Success Notification Banner */}
+          {exportNotice && (
+            <div className="bg-emerald-100/90 border border-emerald-300 text-emerald-950 px-4 py-3 rounded-xl flex items-center justify-between gap-3 text-xs animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
+                <div>
+                  <p className="font-bold">
+                    बॅकअप फाईल ({exportNotice.filename}) यशस्वीरित्या डाऊनलोड झाली आहे!
+                  </p>
+                  <p className="text-emerald-800 text-[11px] mt-0.5">
+                    एकूण {exportNotice.count} विद्यार्थ्यांचा डेटा {exportNotice.docsCount > 0 ? `व ${exportNotice.docsCount} दाखले/नोंदी ` : ''}सुरक्षित सेव्ह झाले आहेत.
+                  </p>
                 </div>
+              </div>
+              {exportNotice.fallbackUrl && (
+                <a
+                  href={exportNotice.fallbackUrl}
+                  download={exportNotice.filename}
+                  className="px-3 py-1 bg-white hover:bg-emerald-50 text-emerald-900 font-bold rounded-md border border-emerald-300 text-xs shadow-2xs shrink-0 transition cursor-pointer"
+                >
+                  पुन्हा डाऊनलोड करा
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Restore Confirmation & Progress Modal */}
+      {restoreModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-black text-sm tracking-wide">
+                  {language === 'mr' ? 'बॅकअप फाईल रीस्टोअर (डेटा पुनर्प्राप्ती)' : 'Restore from Backup File'}
+                </h3>
+              </div>
+              {!isRestoring && (
+                <button
+                  type="button"
+                  onClick={() => setRestoreModalOpen(false)}
+                  className="text-slate-400 hover:text-white transition p-1 rounded-md"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               )}
             </div>
 
-            {/* Seed Sample Records */}
-            <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-amber-600" />
-                <span>Seed Samples</span>
-              </h4>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Insert verified sample student records (classes 8th to 11th) into the database.
-              </p>
-              <button
-                type="button"
-                id="btn-seed-sample-data"
-                onClick={handleSeedData}
-                disabled={isSeeding}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span>{isSeeding ? 'Seeding...' : 'Seed Sample Records'}</span>
-              </button>
-            </div>
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              {restoreError ? (
+                <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 text-rose-700 font-bold text-sm">
+                    <AlertCircle className="w-5 h-5 shrink-0" />
+                    <span>फाईल वाचण्यात समस्या</span>
+                  </div>
+                  <p className="text-xs text-rose-800">{restoreError}</p>
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setRestoreModalOpen(false)}
+                      className="px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition"
+                    >
+                      बंद करा
+                    </button>
+                  </div>
+                </div>
+              ) : restoreResult ? (
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-xl border ${restoreResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : 'bg-rose-50 border-rose-200 text-rose-950'}`}>
+                    <div className="flex items-center gap-3">
+                      {restoreResult.success ? (
+                        <CheckCircle2 className="w-8 h-8 text-emerald-600 shrink-0" />
+                      ) : (
+                        <AlertCircle className="w-8 h-8 text-rose-600 shrink-0" />
+                      )}
+                      <div>
+                        <h4 className="font-bold text-sm">
+                          {restoreResult.success ? 'रीस्टोअर यशस्वी झाले!' : 'रीस्टोअर अयशस्वी'}
+                        </h4>
+                        <p className="text-xs mt-1 text-slate-700">{restoreResult.message}</p>
+                      </div>
+                    </div>
+                  </div>
 
-            {/* Clear Demo Records */}
-            <div className="border border-amber-200 rounded-xl p-4 bg-amber-50/60 space-y-3">
-              <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
-                <Trash2 className="w-4 h-4 text-amber-700" />
-                <span>Clear Demo Records</span>
-              </h4>
-              <p className="text-xs text-amber-800 leading-relaxed">
-                फक्त सर्व नमुना (Sample / Demo) विद्यार्थ्यांची नोंदणी हटवून तुमचे स्वतःचे खरे विद्यार्थी ठेवा.
-              </p>
-              <button
-                type="button"
-                id="btn-clear-demo-settings"
-                onClick={handleClearDemoData}
-                disabled={isSeeding}
-                className="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>{isSeeding ? 'Clearing...' : 'नमुना विद्यार्थी हटवा'}</span>
-              </button>
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRestoreModalOpen(false);
+                        window.location.reload();
+                      }}
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>डेटा अपडेट करा (पूर्ण झाले)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : isRestoring ? (
+                <div className="py-8 px-4 text-center space-y-4">
+                  <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mx-auto" />
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">
+                      डेटा रीस्टोअर केला जात आहे...
+                    </h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      कृपया थांबा, क्लाऊड डेटाबेस व लोकल मेमरीमध्ये नोंदी सेव्ह केल्या जात आहेत.
+                    </p>
+                  </div>
+
+                  {restoreProgress && restoreProgress.total > 0 && (
+                    <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden border border-slate-200">
+                      <div
+                        className="bg-emerald-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.min(100, Math.round((restoreProgress.current / restoreProgress.total) * 100))}%`
+                        }}
+                      ></div>
+                    </div>
+                  )}
+                </div>
+              ) : restorePendingData ? (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2 text-xs">
+                      <span className="text-slate-500 font-semibold">निवडलेली फाईल:</span>
+                      <span className="font-mono font-bold text-slate-900 truncate max-w-[220px]">
+                        {restorePendingData.fileName}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-white p-3 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 block text-[11px]">एकूण विद्यार्थी</span>
+                        <strong className="text-base text-emerald-700 font-black">
+                          {restorePendingData.students.length} नोंदी
+                        </strong>
+                      </div>
+                      <div className="bg-white p-3 rounded-lg border border-slate-200">
+                        <span className="text-slate-500 block text-[11px]">दाखले व प्रमाणपत्रे</span>
+                        <strong className="text-base text-blue-700 font-black">
+                          {restorePendingData.documentLogs.length} नोंदी
+                        </strong>
+                      </div>
+                    </div>
+
+                    {restorePendingData.schoolSettings && (
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 text-xs flex items-center justify-between">
+                        <span className="text-slate-600 font-medium">शाळा प्रोफाइल माहिती:</span>
+                        <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          समाविष्ट (Included)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-slate-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    💡 <strong>सूचना:</strong> ही कृती बॅकअप फाईलमधील विद्यार्थ्यांचा संपूर्ण डेटा व दाखले तुमच्या Google Cloud Firestore डेटाबेसमध्ये पुनर्प्राप्त करेल.
+                  </p>
+
+                  <div className="pt-2 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setRestoreModalOpen(false)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                    >
+                      रद्द करा
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExecuteRestore}
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileCheck2 className="w-4 h-4" />
+                      <span>होय, डेटा रीस्टोअर करा</span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

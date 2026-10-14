@@ -258,12 +258,6 @@ export function StudentMaster() {
           type: 'success',
           message: `All ${count} student records have been deleted successfully.`
         });
-      } else {
-        const res = await studentService.resetToOriginalSchoolData();
-        setNotification({
-          type: 'success',
-          message: `Reset completed. Restored ${res.restored} sample records.`
-        });
       }
 
       await fetchStudents();
@@ -281,21 +275,6 @@ export function StudentMaster() {
     }
   };
 
-  const handleClearDemo = async () => {
-    if (!confirm('तुम्हाला सर्व नमुना (Sample / Demo) विद्यार्थ्यांची नोंदणी हटवून फक्त तुमचे स्वतःचे खरे विद्यार्थी ठेवायचे आहेत का?')) {
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await studentService.clearSampleStudents();
-      alert(`एकूण ${res.deleted} नमुना विद्यार्थी यशस्वीरित्या हटवले आहेत! आता फक्त तुमचे नोंदवलेले विद्यार्थी दिसतील.`);
-      await fetchStudents();
-    } catch (err) {
-      console.error('Error clearing demo data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -527,7 +506,7 @@ export function StudentMaster() {
                     Choose an action to manage register data:
                   </p>
 
-                  {/* Option 1: Complete 1-Click Purge */}
+                  {/* Complete 1-Click Purge */}
                   <button
                     type="button"
                     disabled={isResetting}
@@ -544,26 +523,6 @@ export function StudentMaster() {
                       </h4>
                       <p className="text-[11px] text-rose-700 mt-0.5">
                         Permanently removes all student records from register.
-                      </p>
-                    </div>
-                  </button>
-
-                  {/* Option 2: Reset to default demo samples */}
-                  <button
-                    type="button"
-                    disabled={isResetting}
-                    onClick={() => setResetConfirmationStep('confirm_reset_demo')}
-                    className="w-full text-left p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition flex items-start gap-3 group cursor-pointer"
-                  >
-                    <div className="p-2 bg-slate-700 text-white rounded-lg shrink-0 mt-0.5 group-hover:scale-105 transition">
-                      <RotateCcw className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="text-xs font-bold text-slate-900">
-                        Reset to Demo Data
-                      </h4>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Restores the initial 5 sample student records.
                       </p>
                     </div>
                   </button>
@@ -629,61 +588,6 @@ export function StudentMaster() {
                       className={`py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
                         isResetting
                           ? 'bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300'
-                          : 'bg-white border border-slate-300 hover:bg-slate-100 text-slate-700'
-                      }`}
-                    >
-                      <span>
-                        {isResetting ? 'Cancel' : 'Back'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Step: Confirm Reset Demo */}
-              {resetConfirmationStep === 'confirm_reset_demo' && (
-                <div className="space-y-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <RotateCcw className="w-5 h-5 text-slate-700 shrink-0" />
-                    <span>Confirm Reset</span>
-                  </div>
-                  <p className="text-xs text-slate-700 leading-relaxed">
-                    Reset register to default demo data (5 sample students)?
-                  </p>
-
-                  <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                    <button
-                      type="button"
-                      id="btn-perform-reset-demo"
-                      disabled={isResetting}
-                      onClick={() => handlePerformResetOrDelete('reset_sample')}
-                      className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer disabled:opacity-75"
-                    >
-                      {isResetting ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin" />
-                          <span>Resetting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCcw className="w-4 h-4" />
-                          <span>Confirm Reset</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      id="btn-back-reset-demo"
-                      onClick={() => {
-                        if (isResetting) {
-                          handleCancelOrCloseResetModal();
-                        } else {
-                          setResetConfirmationStep('menu');
-                        }
-                      }}
-                      className={`py-2.5 px-4 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                        isResetting
-                          ? 'bg-slate-200 hover:bg-slate-300 text-slate-800'
                           : 'bg-white border border-slate-300 hover:bg-slate-100 text-slate-700'
                       }`}
                     >

@@ -119,6 +119,68 @@ export function exportStudentsToCSV(students: Student[], filename = 'ShalaVerse_
   URL.revokeObjectURL(url);
 }
 
+export interface DocumentRosterExportItem {
+  grNumber: string;
+  studentName: string;
+  studentNameLocal?: string;
+  gender?: string;
+  admissionClass: string;
+  docType: string;
+  issueDate: string;
+  purposeOrReason: string;
+  conduct: string;
+}
+
+/**
+ * Exports TC, Nirgam, and Bonafide documents roster to CSV
+ */
+export function exportDocumentsRosterToCSV(
+  items: DocumentRosterExportItem[], 
+  filename = 'ShalaVerse_Documents_Issuance_Roster.csv'
+) {
+  if (!items || items.length === 0) {
+    alert('No document records available to export.');
+    return;
+  }
+
+  const headers = [
+    'Sr No (अ.क्र.)',
+    'GR No (जी.आर. क्र.)',
+    'Student Full Name (विद्यार्थ्याचे नाव)',
+    'Name in Marathi (मराठीत नाव)',
+    'Gender (लिंग)',
+    'Class (इयत्ता)',
+    'Document Type (प्रमाणपत्र प्रकार)',
+    'Issue Date (वितरण दिनांक)',
+    'Reason / Purpose / Remarks (कारण / प्रयोजन)',
+    'Conduct (वर्तणूक)'
+  ];
+
+  const rows = items.map((item, index) => [
+    `"${index + 1}"`,
+    `"${item.grNumber || ''}"`,
+    `"${(item.studentName || '').replace(/"/g, '""')}"`,
+    `"${(item.studentNameLocal || '').replace(/"/g, '""')}"`,
+    `"${item.gender === 'Female' ? 'Female / मुलगी' : 'Male / मुलगा'}"`,
+    `"${item.admissionClass || ''}"`,
+    `"${item.docType === 'TC' ? 'School Leaving / T.C. (शाळा सोडल्याचा दाखला)' : item.docType === 'NIRGAM_UTARA' ? 'Nirgam Utara (निर्गम नोंद उतारा)' : 'Bonafide Certificate (बोनाफाइड प्रमाणपत्र)'}"`,
+    `"${item.issueDate || ''}"`,
+    `"${(item.purposeOrReason || '').replace(/"/g, '""')}"`,
+    `"${(item.conduct || 'उत्कृष्ट').replace(/"/g, '""')}"`
+  ]);
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 /**
  * Format Excel date (serial number, Marathi date string, DD/MM/YYYY, etc.) to YYYY-MM-DD
  */

@@ -16,6 +16,8 @@ export interface Student {
   // Personal Information
   studentName: string;
   studentNameLocal?: string; // Regional (Marathi / Devanagari)
+  gender?: 'Male' | 'Female' | 'Other' | string;
+  genderLocal?: string; // लिंग: मुलगा / मुलगी / इतर
   fatherName: string;
   fatherNameLocal?: string;
   motherName: string;

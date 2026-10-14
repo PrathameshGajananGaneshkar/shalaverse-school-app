@@ -16,6 +16,7 @@ import { Student, AdmissionClass } from '../../types';
 import { studentService } from '../../services/studentService';
 import { deduplicateRepeatedPhrase } from '../../utils/devanagariUtils';
 import { normalizeClass } from '../../utils/exportUtils';
+import { getStudentGender } from '../../utils/genderUtils';
 
 interface ExcelImportModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface ColumnOption {
 const REQUIRED_COLUMNS: ColumnOption[] = [
   { key: 'studentName', label: 'Student Name', field: 'studentName', required: true },
   { key: 'grNumber', label: 'GR Number', field: 'grNumber', required: true },
+  { key: 'gender', label: 'Gender / Sex (लिंग)', field: 'gender' },
   { key: 'admissionClass', label: 'Admission Class', field: 'admissionClass' },
   { key: 'admissionYear', label: 'Admission Year', field: 'admissionYear' },
   { key: 'admissionDate', label: 'Admission Date', field: 'admissionDate' },
@@ -231,10 +233,16 @@ export function ExcelImportModal({
         rawDob = `${parts[2].length === 2 ? '20' + parts[2] : parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
       }
 
+      const rawGender = getVal('gender');
+      const studentNameClean = deduplicateRepeatedPhrase(nameVal || `विद्यार्थी ${students.length + 1}`);
+      const detectedGender = rawGender ? getStudentGender({ gender: rawGender }) : getStudentGender({ studentName: studentNameClean });
+
       students.push({
         grNumber: grVal || `GR-${1000 + students.length + 1}`,
         studentId: `20252704020${(100 + students.length + 1).toString().padStart(4, '0')}`,
-        studentName: deduplicateRepeatedPhrase(nameVal || `विद्यार्थी ${students.length + 1}`),
+        studentName: studentNameClean,
+        gender: detectedGender,
+        genderLocal: detectedGender === 'Female' ? 'मुलगी' : 'मुलगा',
         fatherName: deduplicateRepeatedPhrase(getVal('fatherName')),
         motherName: deduplicateRepeatedPhrase(getVal('motherName')),
         admissionClass: matchedClass,

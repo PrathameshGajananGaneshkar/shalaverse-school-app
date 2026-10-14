@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
@@ -27,6 +27,7 @@ import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { exportStudentsToCSV } from '../utils/exportUtils';
 import { CLASS_OPTIONS } from '../components/students/StudentFilter';
+import { getStudentGender } from '../utils/genderUtils';
 
 export function Dashboard() {
   const { t, language } = useLanguage();
@@ -83,12 +84,36 @@ export function Dashboard() {
   const currentAcademicYear = settings.academicYear || '2026-2027';
   const currentYearStudents = students.filter(s => s.admissionYear === currentAcademicYear).length;
   
-  // Class strength distribution
-  const classCounts: Record<string, number> = {};
-  students.forEach(s => {
-    const cls = s.admissionClass || '5th';
-    classCounts[cls] = (classCounts[cls] || 0) + 1;
-  });
+  // Class strength distribution with separate boys & girls
+  const dashboardStats = useMemo(() => {
+    let boys = 0;
+    let girls = 0;
+    const classBreakdown: Record<string, { total: number; boys: number; girls: number }> = {};
+    CLASS_OPTIONS.forEach(c => {
+      classBreakdown[c] = { total: 0, boys: 0, girls: 0 };
+    });
+    students.forEach(s => {
+      const g = getStudentGender(s);
+      if (g === 'Female') girls++;
+      else boys++;
+      const cls = s.admissionClass || '5th';
+      if (!classBreakdown[cls]) {
+        classBreakdown[cls] = { total: 0, boys: 0, girls: 0 };
+      }
+      classBreakdown[cls].total++;
+      if (g === 'Female') classBreakdown[cls].girls++;
+      else classBreakdown[cls].boys++;
+    });
+    return { boys, girls, classBreakdown };
+  }, [students]);
+
+  const classCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    CLASS_OPTIONS.forEach(c => {
+      counts[c] = dashboardStats.classBreakdown[c]?.total || 0;
+    });
+    return counts;
+  }, [dashboardStats]);
 
   // Recent 5 admissions
   const recentStudents = [...students].slice(0, 5);
@@ -183,7 +208,7 @@ export function Dashboard() {
         <StatCard
           title={t('totalStudents')}
           value={totalStudents}
-          subtitle={language === 'mr' ? 'जनरल रजिस्टरमध्ये नोंदणीकृत' : 'Registered in General Book'}
+          subtitle={language === 'mr' ? `👦 मुले: ${dashboardStats.boys} • 👧 मुली: ${dashboardStats.girls}` : `👦 Boys: ${dashboardStats.boys} • 👧 Girls: ${dashboardStats.girls}`}
           icon={<Users className="w-6 h-6" />}
           color="blue"
           onClick={() => navigate('/students')}
@@ -311,31 +336,45 @@ export function Dashboard() {
 
       {/* Class Strength Quick Breakdown */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-slate-900">
-            {t('studentsByClass')} ({language === 'mr' ? 'पटसंख्या सारांश' : 'Strength Overview'})
-          </h3>
-          <span className="text-xs font-semibold text-slate-500">
-            {language === 'mr' ? `एकूण इयत्ता: ${CLASS_OPTIONS.length}` : `Total Classes: ${CLASS_OPTIONS.length}`}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">
+              {t('studentsByClass')} ({language === 'mr' ? 'पटसंख्या सारांश' : 'Strength Overview'})
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {language === 'mr' 
+                ? `एकूण शालेय पटसंख्या: ${totalStudents} (👦 मुले: ${dashboardStats.boys} | 👧 मुली: ${dashboardStats.girls})` 
+                : `Total School Strength: ${totalStudents} (👦 Boys: ${dashboardStats.boys} | 👧 Girls: ${dashboardStats.girls})`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/reports')}
+            className="text-xs font-bold text-blue-700 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+          >
+            <span>{language === 'mr' ? 'सविस्तर वर्गनिहाय अहवाल पहा' : 'View Class Strength Report'}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {CLASS_OPTIONS.map((cls) => {
-            const count = classCounts[cls] || 0;
+            const data = dashboardStats.classBreakdown[cls] || { total: 0, boys: 0, girls: 0 };
             return (
               <div
                 key={cls}
                 onClick={() => navigate(`/students?class=${cls}`)}
-                className="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg p-3 text-center transition cursor-pointer"
+                className="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg p-2.5 text-center transition cursor-pointer"
               >
-                <span className="text-xs font-semibold text-slate-500 block">
+                <span className="text-xs font-semibold text-slate-600 block">
                   {language === 'mr' ? `इयत्ता ${cls}` : `Class ${cls}`}
                 </span>
-                <span className="text-xl font-extrabold text-blue-900 block mt-1">{count}</span>
-                <span className="text-[10px] text-slate-400">
-                  {language === 'mr' ? 'विद्यार्थी' : 'students'}
-                </span>
+                <span className="text-xl font-extrabold text-blue-900 block mt-1 font-mono">{data.total}</span>
+                <div className="flex items-center justify-center gap-1.5 text-[10px] mt-1 font-semibold">
+                  <span className="text-blue-700">👦 {data.boys}</span>
+                  <span className="text-slate-300">•</span>
+                  <span className="text-pink-700">👧 {data.girls}</span>
+                </div>
               </div>
             );
           })}

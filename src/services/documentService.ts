@@ -7,7 +7,8 @@ import {
   orderBy, 
   serverTimestamp,
   writeBatch,
-  deleteDoc
+  deleteDoc,
+  doc
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { DocumentLog } from '../types';
@@ -19,6 +20,19 @@ import {
 
 const COLLECTION_NAME = 'documents_log';
 const LOCAL_LOG_KEY = 'shalaverse_document_logs';
+
+export const INITIAL_SAMPLE_DOC_LOGS: DocumentLog[] = [];
+
+const DEMO_GR_SET = new Set(['4120', '4121', '4122', '3980', '3995', '3810']);
+const DEMO_STU_IDS = new Set(['STU-2026-001', 'STU-2026-002', 'STU-2026-003', 'STU-2025-014', 'STU-2025-025', 'STU-2024-008']);
+
+function isDemoDocLog(log: DocumentLog): boolean {
+  if (!log) return false;
+  if (log.id && log.id.startsWith('doc_sample_')) return true;
+  if (log.grNumber && DEMO_GR_SET.has(String(log.grNumber).trim())) return true;
+  if (log.studentId && DEMO_STU_IDS.has(String(log.studentId).trim())) return true;
+  return false;
+}
 
 export const documentService = {
   async logDocumentIssue(log: Omit<DocumentLog, 'id'>): Promise<void> {
@@ -46,37 +60,92 @@ export const documentService = {
   },
 
   async getDocumentLogs(): Promise<DocumentLog[]> {
-    try {
-      const q = query(collection(db, COLLECTION_NAME), orderBy('issuedDate', 'desc'));
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const logs = snapshot.docs.map(d => ({
-          id: d.id,
-          ...(d.data() as Omit<DocumentLog, 'id'>)
-        }));
-        localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(logs));
-        return logs;
-      } else {
-        // If Firestore is empty, sync local cache to empty
-        localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify([]));
-        return [];
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const q = query(collection(db, COLLECTION_NAME), orderBy('issuedDate', 'desc'));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const logs = snapshot.docs
+            .map(d => ({
+              id: d.id,
+              ...(d.data() as Omit<DocumentLog, 'id'>)
+            }))
+            .filter(l => !isDemoDocLog(l));
+          localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(logs));
+          return logs;
+        }
+      } catch (err) {
+        if (isQuotaExceededError(err)) {
+          recordQuotaExceeded();
+        }
+        console.warn('Firestore doc log fetch failed:', err);
       }
-    } catch (err) {
-      console.warn('Firestore doc log fetch failed:', err);
     }
 
     const local = localStorage.getItem(LOCAL_LOG_KEY);
-    if (local) {
+    if (local !== null) {
       try {
         const parsed = JSON.parse(local);
         if (Array.isArray(parsed)) {
-          return parsed;
+          const cleaned = parsed.filter(l => !isDemoDocLog(l));
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(cleaned));
+          }
+          return cleaned;
         }
       } catch {
         // ignore
       }
     }
+
     return [];
+  },
+
+  // Restore document logs from backup
+  async restoreDocumentLogs(logs: DocumentLog[]): Promise<number> {
+    if (!logs || !Array.isArray(logs) || logs.length === 0) return 0;
+    
+    // 1. Save locally
+    const current = await this.getDocumentLogs();
+    const existingIds = new Set(current.map(c => c.id || `${c.grNumber}_${c.documentType}_${c.issuedDate}`));
+    const newLogs: DocumentLog[] = [];
+    
+    for (const log of logs) {
+      if (isDemoDocLog(log)) continue;
+      const key = log.id || `${log.grNumber}_${log.documentType}_${log.issuedDate}`;
+      if (!existingIds.has(key)) {
+        newLogs.push(log);
+        existingIds.add(key);
+      }
+    }
+    
+    const combined = [...newLogs, ...current];
+    try {
+      localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(combined));
+    } catch {}
+
+    // 2. Sync to Firestore if quota permits
+    if (!isFirestoreQuotaExceeded() && newLogs.length > 0) {
+      try {
+        const CHUNK_SIZE = 400;
+        for (let i = 0; i < newLogs.length; i += CHUNK_SIZE) {
+          const chunk = newLogs.slice(i, i + CHUNK_SIZE);
+          const batch = writeBatch(db);
+          for (const item of chunk) {
+            const { id, ...payload } = item;
+            const docRef = id && id.length > 5 ? doc(db, COLLECTION_NAME, id) : doc(collection(db, COLLECTION_NAME));
+            batch.set(docRef, {
+              ...payload,
+              serverCreatedAt: serverTimestamp()
+            });
+          }
+          await batch.commit();
+        }
+      } catch (err) {
+        console.warn('Document logs restore to Firestore warning:', err);
+      }
+    }
+    return newLogs.length;
   },
 
   // Completely wipe all document logs (when all students are deleted or full reset)
