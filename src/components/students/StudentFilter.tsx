@@ -9,6 +9,8 @@ interface StudentFilterProps {
   onYearChange: (value: string) => void;
   selectedClass: string;
   onClassChange: (value: string) => void;
+  selectedStatus?: 'all' | 'active' | 'tc_issued';
+  onStatusChange?: (value: 'all' | 'active' | 'tc_issued') => void;
   onReset: () => void;
   years: string[];
   totalResults: number;
@@ -26,6 +28,8 @@ export function StudentFilter({
   onYearChange,
   selectedClass,
   onClassChange,
+  selectedStatus = 'all',
+  onStatusChange,
   onReset,
   years,
   totalResults
@@ -43,15 +47,29 @@ export function StudentFilter({
             type="text"
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={t('searchPlaceholder')}
+            placeholder={language === 'mr' ? 'विद्यार्थ्याचे नाव, जी.आर. क्र., आयडी किंवा पालकांचे नाव शोधा...' : t('searchPlaceholder')}
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition"
           />
         </div>
 
         {/* Filters Group */}
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-3">
-          {/* Admission Year Filter */}
+          {/* Status Filter (Active vs TC Issued) */}
           <div className="w-full sm:w-44">
+            <select
+              id="select-student-status"
+              value={selectedStatus}
+              onChange={(e) => onStatusChange && onStatusChange(e.target.value as 'all' | 'active' | 'tc_issued')}
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-600"
+            >
+              <option value="all">{language === 'mr' ? 'सर्व विद्यार्थी (All)' : 'All Students'}</option>
+              <option value="active">{language === 'mr' ? '🟢 शाळेत शिकणारे (Active)' : '🟢 Active Students'}</option>
+              <option value="tc_issued">{language === 'mr' ? '🔴 TC दिलेले (TC Issued)' : '🔴 TC Issued (Left School)'}</option>
+            </select>
+          </div>
+
+          {/* Admission Year Filter */}
+          <div className="w-full sm:w-40">
             <select
               id="select-admission-year"
               value={selectedYear}
@@ -68,7 +86,7 @@ export function StudentFilter({
           </div>
 
           {/* Class Filter */}
-          <div className="w-full sm:w-40">
+          <div className="w-full sm:w-36">
             <select
               id="select-admission-class"
               value={selectedClass}
@@ -85,7 +103,7 @@ export function StudentFilter({
           </div>
 
           {/* Reset button */}
-          {(searchTerm || selectedYear || selectedClass) && (
+          {(searchTerm || selectedYear || selectedClass || selectedStatus !== 'all') && (
             <button
               id="btn-reset-filters"
               type="button"

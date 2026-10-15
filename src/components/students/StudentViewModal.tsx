@@ -78,7 +78,15 @@ export function StudentViewModal({
                 <h2 className="text-xl font-bold text-white leading-tight">
                   {student.studentName}
                 </h2>
-                <Badge variant="green" size="sm">{language === 'mr' ? 'सक्रिय विद्यार्थी' : 'Active Student'}</Badge>
+                {Boolean(student.certificateDate || student.leavingReason) ? (
+                  <Badge variant="red" size="sm">
+                    🔴 {language === 'mr' ? `TC दिली (${formatDate(student.certificateDate || '')})` : `TC Issued (${formatDate(student.certificateDate || '')})`}
+                  </Badge>
+                ) : (
+                  <Badge variant="green" size="sm">
+                    {language === 'mr' ? 'सक्रिय विद्यार्थी' : 'Active Student'}
+                  </Badge>
+                )}
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs text-blue-200">
                 <div className="inline-flex items-center gap-1.5 bg-blue-500/25 border border-blue-400/40 px-2.5 py-0.5 rounded-md text-white font-mono font-bold">
@@ -122,12 +130,19 @@ export function StudentViewModal({
               onClick={() => {
                 onClose();
                 const sId = student.id || student.studentId || student.grNumber;
-                navigate(`/documents/tc?studentId=${sId}`);
+                const hasTc = Boolean(student.certificateDate || student.leavingReason);
+                navigate(`/documents/tc?studentId=${sId}${hasTc ? '&duplicate=true' : ''}`);
               }}
-              className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+              className={`px-3 py-1.5 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                Boolean(student.certificateDate || student.leavingReason)
+                  ? 'bg-rose-700 hover:bg-rose-800 ring-1 ring-rose-400 font-bold'
+                  : 'bg-slate-700 hover:bg-slate-600'
+              }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              {language === 'mr' ? 'दाखला (T.C.)' : 'T.C.'}
+              {Boolean(student.certificateDate || student.leavingReason) 
+                ? (language === 'mr' ? 'द्वितीय प्रत (Duplicate TC)' : 'Duplicate TC')
+                : (language === 'mr' ? 'दाखला (T.C.)' : 'T.C.')}
             </button>
 
             <button
@@ -145,6 +160,32 @@ export function StudentViewModal({
             </button>
           </div>
         </div>
+
+        {/* Warning banner if student has already left the school / TC issued */}
+        {Boolean(student.certificateDate || student.leavingReason) && (
+          <div className="bg-rose-50 border border-rose-300 rounded-xl p-3 text-xs text-rose-950 flex items-start sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <div>
+                <strong>{language === 'mr' ? 'शाळा सोडल्याची नोंद:' : 'School Leaving Record:'}</strong>{' '}
+                {language === 'mr' 
+                  ? `या विद्यार्थ्याला ${formatDate(student.certificateDate || '')} रोजी मूळ शाळा सोडल्याचा दाखला (T.C.) देण्यात आला आहे. पुन्हा दाखला हवा असल्यास 'द्वितीय प्रत (Duplicate TC)' काढावी.`
+                  : `Original T.C. was issued on ${formatDate(student.certificateDate || '')}. Generate Duplicate TC if requested again.`}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                const sId = student.id || student.studentId || student.grNumber;
+                navigate(`/documents/tc?studentId=${sId}&duplicate=true`);
+              }}
+              className="shrink-0 px-2.5 py-1 bg-rose-700 hover:bg-rose-800 text-white rounded font-bold text-[11px] transition cursor-pointer"
+            >
+              {language === 'mr' ? 'द्वितीय प्रत उघडा' : 'Open Duplicate TC'}
+            </button>
+          </div>
+        )}
 
         {/* 6 Comprehensive Information Sections */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

@@ -44,6 +44,7 @@ export function StudentMaster() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedYear, setSelectedYear] = useState(searchParams.get('year') || '');
   const [selectedClass, setSelectedClass] = useState(searchParams.get('class') || '');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | 'active' | 'tc_issued'>('all');
 
   // Modal States
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -93,15 +94,28 @@ export function StudentMaster() {
   const filteredStudents = useMemo(() => {
     const query = deferredSearchTerm.trim().toLowerCase();
     return students.filter(student => {
+      // Status filter (Active vs TC Issued)
+      if (selectedStatus === 'active') {
+        const hasTc = Boolean(student.certificateDate && String(student.certificateDate).trim().length > 0);
+        if (hasTc) return false;
+      } else if (selectedStatus === 'tc_issued') {
+        const hasTc = Boolean(
+          (student.certificateDate && String(student.certificateDate).trim().length > 0) ||
+          (student.leavingReason && String(student.leavingReason).trim().length > 0)
+        );
+        if (!hasTc) return false;
+      }
+
       // Search term matching
       if (query) {
         const nameMatch = student.studentName?.toLowerCase().includes(query);
+        const nameMrMatch = student.studentNameLocal?.toLowerCase().includes(query);
         const grMatch = student.grNumber?.toLowerCase().includes(query);
         const studentIdMatch = student.studentId?.toLowerCase().includes(query);
         const fatherMatch = student.fatherName?.toLowerCase().includes(query);
         const uidMatch = student.uid?.toLowerCase().includes(query);
         const mobileMatch = student.mobile?.toLowerCase().includes(query);
-        if (!nameMatch && !grMatch && !studentIdMatch && !fatherMatch && !uidMatch && !mobileMatch) {
+        if (!nameMatch && !nameMrMatch && !grMatch && !studentIdMatch && !fatherMatch && !uidMatch && !mobileMatch) {
           return false;
         }
       }
@@ -118,12 +132,13 @@ export function StudentMaster() {
 
       return true;
     });
-  }, [students, deferredSearchTerm, selectedYear, selectedClass]);
+  }, [students, deferredSearchTerm, selectedYear, selectedClass, selectedStatus]);
 
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedYear('');
     setSelectedClass('');
+    setSelectedStatus('all');
     setSearchParams({});
   };
 
@@ -427,6 +442,8 @@ export function StudentMaster() {
         onYearChange={setSelectedYear}
         selectedClass={selectedClass}
         onClassChange={setSelectedClass}
+        selectedStatus={selectedStatus}
+        onStatusChange={setSelectedStatus}
         onReset={handleResetFilters}
         years={uniqueYears}
         totalResults={filteredStudents.length}

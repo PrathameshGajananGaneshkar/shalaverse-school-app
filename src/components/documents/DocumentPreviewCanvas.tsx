@@ -20,6 +20,15 @@ interface DocumentPreviewCanvasProps {
   onEdit: () => void;
 }
 
+// Helper to detect if device is genuinely a mobile phone / handheld device
+export const checkIsMobileDevice = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isTouchScreen = ('ontouchstart' in window || navigator.maxTouchPoints > 1);
+  const isSmallScreen = window.innerWidth < 768;
+  return isMobileUA || (isTouchScreen && isSmallScreen);
+};
+
 export function DocumentPreviewCanvas({
   children,
   lang = 'mr',
@@ -38,11 +47,32 @@ export function DocumentPreviewCanvas({
   // Layout measurements
   const [containerWidth, setContainerWidth] = useState<number>(800);
   const [contentHeight, setContentHeight] = useState<number>(STANDARD_A4_HEIGHT);
-  const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => checkIsMobileDevice());
 
-  // View mode and scale/pan state
-  const [viewMode, setViewMode] = useState<'fit' | 'actual' | 'custom'>('fit');
-  const [scale, setScale] = useState<number>(1);
+  // View mode and scale/pan state:
+  // On PC: default to 'actual' (100% full PC size).
+  // On Mobile: default to 'fit' (fits mobile screen width)!
+  const [viewMode, setViewMode] = useState<'fit' | 'actual' | 'custom'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('shalaverse_doc_view_mode');
+      if (saved === 'actual' || saved === 'fit') return saved;
+      return checkIsMobileDevice() ? 'fit' : 'actual';
+    }
+    return 'actual';
+  });
+
+  const [scale, setScale] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('shalaverse_doc_view_mode');
+      if (saved === 'actual') return 1;
+      if (saved === 'fit' || checkIsMobileDevice()) {
+        const availableW = Math.max(280, (window.innerWidth || 360) - 16);
+        return Math.min(1, Math.max(0.35, Math.round((availableW / 794) * 100) / 100));
+      }
+    }
+    return 1;
+  });
+
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isInteracting, setIsInteracting] = useState<boolean>(false);
 
@@ -88,7 +118,7 @@ export function DocumentPreviewCanvas({
       if (containerRef.current) {
         const width = containerRef.current.clientWidth;
         setContainerWidth(width);
-        setIsMobile(width < 768);
+        setIsMobile(checkIsMobileDevice());
       }
       if (contentWrapperRef.current) {
         const height = contentWrapperRef.current.offsetHeight;
@@ -132,18 +162,12 @@ export function DocumentPreviewCanvas({
   }, [children]);
 
   // Calculate fit scale: document scaled to fit nicely on current device
-  const paddingOffset = isMobile ? 12 : 32;
+  const paddingOffset = isMobile ? 12 : 24;
   const availableWidth = Math.max(280, containerWidth - paddingOffset);
   const widthFitScale = availableWidth / STANDARD_A4_WIDTH;
 
-  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const availableHeight = Math.max(380, viewportHeight - 250);
-  const heightFitScale = availableHeight / (contentHeight || STANDARD_A4_HEIGHT);
-
-  const fitScale = isMobile 
-    ? Math.min(1, Math.max(0.32, Math.round(widthFitScale * 100) / 100))
-    : Math.min(1, Math.max(0.42, Math.round(Math.min(widthFitScale, heightFitScale) * 100) / 100));
-
+  // On mobile or when Fit mode is active, fit cleanly to width without shrinking height
+  const fitScale = Math.min(1, Math.max(0.32, Math.round(widthFitScale * 100) / 100));
   fitScaleRef.current = fitScale;
 
   // Initialize or update scale when viewMode or fitScale changes
@@ -434,6 +458,9 @@ export function DocumentPreviewCanvas({
     setPan({ x: 0, y: 0 });
     scaleRef.current = fitScale;
     panRef.current = { x: 0, y: 0 };
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('shalaverse_doc_view_mode', 'fit');
+    }
   };
 
   const handleSetActual = () => {
@@ -442,6 +469,9 @@ export function DocumentPreviewCanvas({
     setPan({ x: 0, y: 0 });
     scaleRef.current = 1;
     panRef.current = { x: 0, y: 0 };
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('shalaverse_doc_view_mode', 'actual');
+    }
   };
 
   const isFitActive = viewMode === 'fit' || Math.abs(scale - fitScale) < 0.03;
@@ -458,39 +488,41 @@ export function DocumentPreviewCanvas({
       <div className="w-full bg-slate-900 text-white rounded-xl p-2.5 sm:p-3 mb-3 shadow-md border border-slate-800 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
           
-          {/* Left: View Mode Toggle & Zoom Controls */}
+          {/* Left: View Mode Toggle (PC Size vs Mobile Size) & Zoom Controls */}
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             
-            {/* View Mode Buttons */}
+            {/* View Mode Toggle: Clear PC Size and Mobile Size Options */}
             <div className="flex items-center bg-slate-800 p-0.5 rounded-lg border border-slate-700">
-              <button
-                type="button"
-                id="doc-view-fit-btn"
-                onClick={handleSetFit}
-                title={lang === 'mr' ? 'स्क्रीनवर पूर्ण दाखला बसवा (Fit to Screen)' : 'Fit Document to Screen'}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer min-h-[36px] ${
-                  isFitActive 
-                    ? 'bg-blue-600 text-white shadow-xs' 
-                    : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
-                }`}
-              >
-                {isMobile ? <Smartphone className="w-3.5 h-3.5 shrink-0" /> : <Maximize2 className="w-3.5 h-3.5 shrink-0" />}
-                <span>{lang === 'mr' ? 'ऑटो फिट' : 'Fit'}</span>
-              </button>
-
+              {/* PC Size (100% Full View) */}
               <button
                 type="button"
                 id="doc-view-actual-btn"
                 onClick={handleSetActual}
-                title={lang === 'mr' ? 'मूळ १००% आकार (100% Actual Size)' : '100% Actual Size'}
-                className={`px-2.5 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer min-h-[36px] ${
+                title={lang === 'mr' ? 'संगणक/लॅपटॉप साईज (१००% मूळ A4 आकार)' : 'Desktop/PC Size (100% Actual A4)'}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer min-h-[36px] ${
                   isActualActive
                     ? 'bg-blue-600 text-white shadow-xs' 
                     : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
                 }`}
               >
-                <Monitor className="w-3.5 h-3.5 shrink-0" />
-                <span>{lang === 'mr' ? '१००% मूळ' : '100%'}</span>
+                <Monitor className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                <span>{lang === 'mr' ? '🖥️ PC साईज (100%)' : '🖥️ PC Size (100%)'}</span>
+              </button>
+
+              {/* Mobile Size (Fit to Phone Screen with Touch Zoom) */}
+              <button
+                type="button"
+                id="doc-view-fit-btn"
+                onClick={handleSetFit}
+                title={lang === 'mr' ? 'मोबाईल स्क्रीन साईज (ऑटो-फिट • बोटांनी झूम)' : 'Mobile Phone Size (Auto-Fit • Pinch to Zoom)'}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-1.5 transition cursor-pointer min-h-[36px] ${
+                  isFitActive 
+                    ? 'bg-blue-600 text-white shadow-xs' 
+                    : 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5 shrink-0 text-blue-300" />
+                <span>{lang === 'mr' ? '📱 मोबाईल साईज' : '📱 Mobile Size'}</span>
               </button>
             </div>
 
@@ -523,7 +555,7 @@ export function DocumentPreviewCanvas({
               {(!isFitActive || isZoomed) && (
                 <button
                   type="button"
-                  onClick={handleSetFit}
+                  onClick={isMobile ? handleSetFit : handleSetActual}
                   title={lang === 'mr' ? 'रीसेट करा' : 'Reset View'}
                   className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-700 cursor-pointer"
                 >
@@ -561,42 +593,44 @@ export function DocumentPreviewCanvas({
         {/* View Mode Description & Helper Bar */}
         <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
           <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isFitActive ? 'bg-blue-400' : isActualActive ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+            <span className={`w-2 h-2 rounded-full ${isActualActive ? 'bg-emerald-400 animate-pulse' : isFitActive ? 'bg-blue-400' : 'bg-amber-400'}`}></span>
             <span>
-              {isFitActive 
-                ? (lang === 'mr' ? 'दाखला स्क्रीनवर पूर्ण बसवला आहे (ऑटो फिट)' : 'Certificate fitted to screen view')
-                : isActualActive
-                ? (lang === 'mr' ? 'मूळ १००% A4 आकार (प्रिंट साईज)' : '100% Original A4 Print Size')
-                : (lang === 'mr' ? `कस्टम झूम: ${currentPercent}%` : `Custom Zoom: ${currentPercent}%`)}
+              {isActualActive
+                ? (lang === 'mr' ? '💻 पीसी साईज: मूळ १००% A4 आकार (स्पष्ट व पूर्ण मजकूर)' : '💻 PC Size: 100% Original A4 Size (Full View)')
+                : isFitActive 
+                ? (lang === 'mr' ? '📱 मोबाईल साईज: स्क्रीनवर ऑटो-फिट (बोटांनी झूम करू शकता)' : '📱 Mobile Size: Screen Auto-Fit (Pinch to Zoom)')
+                : (lang === 'mr' ? `🔍 कस्टम झूम: ${currentPercent}%` : `🔍 Custom Zoom: ${currentPercent}%`)}
             </span>
           </div>
           <span className="text-[10px] text-slate-400 font-mono hidden sm:inline">
-            A4 (210×297mm • {STANDARD_A4_WIDTH}px)
+            A4 Proforma (210×297mm • {STANDARD_A4_WIDTH}px)
           </span>
         </div>
       </div>
 
-      {/* Mobile Gesture Helper Banner (Shown on mobile devices) */}
-      <div className="w-full sm:hidden flex items-center justify-between px-3 py-1.5 mb-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl text-blue-900 text-xs shadow-2xs print:hidden">
-        <div className="flex items-center gap-1.5 font-medium truncate">
-          <span className="text-base shrink-0">👆</span>
-          <span className="truncate">
-            {lang === 'mr' 
-              ? 'दोन बोटांनी पिंच झूम (Pinch) करा किंवा डबल टॅप करा' 
-              : 'Pinch with 2 fingers to zoom or double-tap'}
-          </span>
+      {/* Mobile Gesture Helper Banner (Shown ONLY on mobile devices or when in Mobile Fit mode) */}
+      {(isMobile || viewMode === 'fit') && (
+        <div className="w-full flex items-center justify-between px-3 py-1.5 mb-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl text-blue-900 text-xs shadow-2xs print:hidden">
+          <div className="flex items-center gap-1.5 font-medium truncate">
+            <span className="text-base shrink-0">👆</span>
+            <span className="truncate">
+              {lang === 'mr' 
+                ? 'दोन बोटांनी पिंच झूम (Pinch) करा किंवा डबल टॅप करा' 
+                : 'Pinch with 2 fingers to zoom or double-tap'}
+            </span>
+          </div>
+          {isZoomed && (
+            <button
+              type="button"
+              onClick={handleSetFit}
+              className="shrink-0 ml-2 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>{lang === 'mr' ? 'मूळ आकार' : 'Reset'}</span>
+            </button>
+          )}
         </div>
-        {isZoomed && (
-          <button
-            type="button"
-            onClick={handleSetFit}
-            className="shrink-0 ml-2 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer active:scale-95 transition"
-          >
-            <RotateCcw className="w-3 h-3" />
-            <span>{lang === 'mr' ? 'मूळ आकार' : 'Reset'}</span>
-          </button>
-        )}
-      </div>
+      )}
 
       {/* 2. Responsive Canvas Viewport with Touch Gesture (Pinch & Pan) Support */}
       <div 
@@ -605,13 +639,15 @@ export function DocumentPreviewCanvas({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`w-full bg-slate-200/70 p-1.5 sm:p-4 rounded-2xl border border-slate-300/80 shadow-inner flex justify-center items-start overflow-hidden relative select-none print:bg-transparent print:p-0 print:border-none print:shadow-none ${
-          isZoomed ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+        className={`w-full bg-slate-200/70 p-2 sm:p-5 rounded-2xl border border-slate-300/80 shadow-inner flex justify-center items-start relative select-none print:bg-transparent print:p-0 print:border-none print:shadow-none ${
+          isZoomed 
+            ? 'cursor-grab active:cursor-grabbing overflow-hidden' 
+            : (isMobile || viewMode === 'fit' ? 'overflow-hidden cursor-default' : 'overflow-x-auto overflow-y-visible cursor-default')
         }`}
         style={{
           touchAction: isZoomed ? 'none' : 'pan-y',
-          minHeight: isMobile ? '460px' : '560px',
-          height: isMobile ? Math.min(Math.max(480, fittedVisualHeight + 24), 720) : 'auto'
+          minHeight: (isMobile || viewMode === 'fit') ? '460px' : '1140px',
+          height: (isMobile || viewMode === 'fit') ? Math.min(Math.max(500, fittedVisualHeight + 24), 850) : 'auto'
         }}
       >
         {/* Floating Quick Reset Button on Mobile when zoomed */}
@@ -619,7 +655,7 @@ export function DocumentPreviewCanvas({
           <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 print:hidden animate-in fade-in zoom-in-95 duration-150">
             <button
               type="button"
-              onClick={handleSetFit}
+              onClick={isMobile ? handleSetFit : handleSetActual}
               className="px-3.5 py-2 bg-slate-900/90 hover:bg-slate-950 text-white rounded-full text-xs font-bold shadow-xl flex items-center gap-2 border border-slate-700/80 backdrop-blur-md active:scale-95 transition cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5 text-blue-400" />

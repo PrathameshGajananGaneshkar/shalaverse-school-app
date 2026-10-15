@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Eye, Edit3, Trash2, UserPlus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Eye, Edit3, Trash2, UserPlus, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, FileText } from 'lucide-react';
 import { Student } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
 import { Badge } from '../common/Badge';
+import { formatDate } from '../../utils/dateUtils';
 import { getStudentGender, getGenderLabel } from '../../utils/genderUtils';
 
 interface StudentTableProps {
@@ -23,6 +25,7 @@ export function StudentTable({
   isLoading
 }: StudentTableProps) {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -134,9 +137,18 @@ export function StudentTable({
                 <td className="py-3.5 px-4 sm:px-6">
                   <div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-bold text-slate-900 leading-tight">
+                      <span 
+                        onClick={() => onView(student)}
+                        className="font-bold text-slate-900 leading-tight hover:text-blue-700 hover:underline cursor-pointer transition-colors"
+                        title={t('view')}
+                      >
                         {student.studentName}
                       </span>
+                      {student.studentNameLocal && (
+                        <span className="text-xs text-slate-500 font-medium">
+                          ({student.studentNameLocal})
+                        </span>
+                      )}
                       <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
                         getStudentGender(student) === 'Female'
                           ? 'bg-pink-50 text-pink-700 border border-pink-200'
@@ -145,6 +157,26 @@ export function StudentTable({
                         {getStudentGender(student) === 'Female' ? '👧 मुलगी' : '👦 मुलगा'}
                       </span>
                     </div>
+
+                    {/* Prominent TC Issued Alert Badge */}
+                    {(student.certificateDate || student.leavingReason) && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                          <span>
+                            {language === 'mr' 
+                              ? `🔴 TC दिली (${formatDate(student.certificateDate || '')})` 
+                              : `🔴 TC Issued (${formatDate(student.certificateDate || '')})`}
+                          </span>
+                        </span>
+                        {student.leavingReason && (
+                          <span className="text-[11px] text-slate-500 italic max-w-xs truncate">
+                            • {student.leavingReason}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {student.fatherName && (
                       <span className="text-xs text-slate-500 block mt-0.5">
                         {language === 'mr' ? 'पालक: ' : 'S/O / D/O: '}{student.fatherName}
@@ -174,10 +206,38 @@ export function StudentTable({
                       type="button"
                       onClick={() => onView(student)}
                       title={t('view')}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>{t('view')}</span>
+                    </button>
+
+                    {/* TC / Duplicate TC Shortcut Button */}
+                    <button
+                      type="button"
+                      id={`btn-tc-${student.grNumber || student.id}`}
+                      onClick={() => {
+                        const sId = student.id || student.studentId || student.grNumber;
+                        const hasTc = Boolean(student.certificateDate || student.leavingReason);
+                        navigate(`/documents/tc?studentId=${sId}${hasTc ? '&duplicate=true' : ''}`);
+                      }}
+                      title={
+                        Boolean(student.certificateDate || student.leavingReason)
+                          ? (language === 'mr' ? 'या विद्यार्थ्याला TC दिली आहे (द्वितीय प्रत काढा)' : 'TC already issued (Generate Duplicate)')
+                          : (language === 'mr' ? 'शाळा सोडल्याचा दाखला (TC) काढा' : 'Issue TC')
+                      }
+                      className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer ${
+                        Boolean(student.certificateDate || student.leavingReason)
+                          ? 'bg-rose-700 hover:bg-rose-800 ring-1 ring-rose-400'
+                          : 'bg-slate-700 hover:bg-slate-800'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>
+                        {Boolean(student.certificateDate || student.leavingReason)
+                          ? (language === 'mr' ? 'द्वितीय प्रत' : 'Duplicate TC')
+                          : 'TC'}
+                      </span>
                     </button>
 
                     {/* Edit Button - Green */}
@@ -186,7 +246,7 @@ export function StudentTable({
                       type="button"
                       onClick={() => onEdit(student)}
                       title={t('edit')}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>{t('edit')}</span>
@@ -198,7 +258,7 @@ export function StudentTable({
                       type="button"
                       onClick={() => onDelete(student)}
                       title={t('delete')}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs transition shrink-0 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>{t('delete')}</span>

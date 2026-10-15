@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   FileText, 
@@ -15,7 +15,11 @@ import {
   Search,
   X,
   Check,
-  Users
+  Users,
+  AlertTriangle,
+  Clock,
+  ShieldAlert,
+  Layers
 } from 'lucide-react';
 import { Student, DocumentLog } from '../types';
 import { studentService } from '../services/studentService';
@@ -27,12 +31,43 @@ import { BonafideCertificate } from '../components/documents/BonafideCertificate
 import { NirgamUtara } from '../components/documents/NirgamUtara';
 import { DocumentPreviewCanvas } from '../components/documents/DocumentPreviewCanvas';
 import { CertificateEditModal, CustomDocFields } from '../components/documents/CertificateEditModal';
+import { StudentTcHistoryModal } from '../components/documents/StudentTcHistoryModal';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { formatDate } from '../utils/dateUtils';
 import { printCertificateElement } from '../utils/exportUtils';
 
 type DocTab = 'tc' | 'bonafide' | 'nirgam-utara';
 type DocLang = 'mr' | 'en';
+
+export interface TcIssueInfo {
+  isIssued: boolean;
+  issuedDate: string;
+  tcLog?: DocumentLog | null;
+  allTcLogs: DocumentLog[];
+  copyCount: number;
+  leavingReason?: string;
+}
+
+// Helper to check if student specifically has a Transfer Certificate (TC) issued
+export const getStudentTcIssueInfo = (student: Student | null, logs: DocumentLog[]): TcIssueInfo | null => {
+  if (!student) return null;
+  const tcLogs = logs.filter(l => 
+    l.documentType === "TC" &&
+    ((l.studentId && (l.studentId === student.id || l.studentId === student.studentId)) ||
+     (l.grNumber && student.grNumber && String(l.grNumber).trim() === String(student.grNumber).trim()))
+  );
+  const tcDate = tcLogs[0]?.issuedDate || (student.certificateDate && String(student.certificateDate).trim()) || null;
+  const hasTcReason = Boolean(student.leavingReason && String(student.leavingReason).trim().length > 0);
+  if (!tcDate && tcLogs.length === 0 && !hasTcReason) return null;
+  return {
+    isIssued: true,
+    issuedDate: tcDate || "",
+    tcLog: tcLogs[0] || null,
+    allTcLogs: tcLogs,
+    copyCount: tcLogs.length > 0 ? tcLogs.length : 1,
+    leavingReason: student.leavingReason || tcLogs[0]?.purpose || ""
+  };
+};
 
 // Helper to determine if a student has had a document (TC, Bonafide, Nirgam) issued
 export const isStudentIssued = (student: Student, logs: DocumentLog[]): boolean => {
@@ -88,6 +123,13 @@ export function Documents() {
 
   const currentTab = getActiveTab();
   const paramStudentId = searchParams.get('studentId') || '';
+  const paramDuplicate = searchParams.get('duplicate') === 'true';
+
+  // Duplicate TC States
+  const [isDuplicateMode, setIsDuplicateMode] = useState<boolean>(paramDuplicate);
+  const [duplicateRemarks, setDuplicateRemarks] = useState<string>('');
+  const [showStudentTcHistory, setShowStudentTcHistory] = useState<boolean>(false);
+  const [studentHadTcPriorToSelection, setStudentHadTcPriorToSelection] = useState<boolean>(false);
 
   // Document language state: default to Marathi or current app language
   const [docLang, setDocLang] = useState<DocLang>(() => {
@@ -109,13 +151,42 @@ export function Documents() {
   const [progress, setProgress] = useState('');
   const [applicantName, setApplicantName] = useState('');
 
+  // Logs
+  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+
   // Live Edit Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Logs
-  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
+  // Computed information for previous TC issuance
+  const studentTcInfo = useMemo(() => {
+    return getStudentTcIssueInfo(selectedStudent, documentLogs);
+  }, [selectedStudent, documentLogs]);
+  const hasPreviousTc = Boolean(studentTcInfo);
+
+  // Sync duplicate param
+  useEffect(() => {
+    if (paramDuplicate) {
+      setIsDuplicateMode(true);
+    }
+  }, [paramDuplicate]);
+
+  // Pre-fill duplicate remarks when duplicate mode is enabled
+  useEffect(() => {
+    if (currentTab === 'tc' && isDuplicateMode && studentTcInfo) {
+      if (!duplicateRemarks) {
+        setDuplicateRemarks(
+          docLang === 'mr'
+            ? `सदर दाखल्याची पहिली प्रत दिनांक ${formatDate(studentTcInfo.issuedDate || selectedStudent?.certificateDate || '')} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+            : `The original certificate was issued on ${formatDate(studentTcInfo.issuedDate || selectedStudent?.certificateDate || '')}. As per parent\'s application reporting loss of original, this "DUPLICATE COPY" is issued.`
+        );
+      }
+      if (!serialNumber.startsWith('DUP-')) {
+        setSerialNumber(prev => prev.startsWith('TC-') ? `DUP-${prev}` : `DUP-TC-${prev}`);
+      }
+    }
+  }, [currentTab, isDuplicateMode, studentTcInfo, docLang]);
 
   // Student filter and search state
   const [filterMode, setFilterMode] = useState<'issued' | 'all'>(() => {
@@ -173,7 +244,13 @@ export function Documents() {
             if (match.leavingReason) setLeavingReason(match.leavingReason);
             if (match.behaviour) setConduct(match.behaviour);
             if (match.academicProgress) setProgress(match.academicProgress);
-            // If the requested student is not in the issued list, switch to 'all' so they are displayed
+            const hadTc = Boolean(getStudentTcIssueInfo(match, validLogs));
+            setStudentHadTcPriorToSelection(hadTc || paramDuplicate);
+            if (paramDuplicate || hadTc) {
+              setIsDuplicateMode(true);
+            } else {
+              setIsDuplicateMode(false);
+            }
             if (!isStudentIssued(match, validLogs)) {
               setFilterMode('all');
             }
@@ -184,12 +261,18 @@ export function Documents() {
           if (issued[0].leavingReason) setLeavingReason(issued[0].leavingReason);
           if (issued[0].behaviour) setConduct(issued[0].behaviour);
           if (issued[0].academicProgress) setProgress(issued[0].academicProgress);
+          const hadTc = Boolean(getStudentTcIssueInfo(issued[0], validLogs));
+          setStudentHadTcPriorToSelection(hadTc);
+          setIsDuplicateMode(hadTc);
         } else if (studentList.length > 0) {
           setSelectedStudent(studentList[0]);
           setSelectedStudentId(studentList[0].id || studentList[0].studentId);
           if (studentList[0].leavingReason) setLeavingReason(studentList[0].leavingReason);
           if (studentList[0].behaviour) setConduct(studentList[0].behaviour);
           if (studentList[0].academicProgress) setProgress(studentList[0].academicProgress);
+          const hadTc = Boolean(getStudentTcIssueInfo(studentList[0], validLogs));
+          setStudentHadTcPriorToSelection(hadTc);
+          setIsDuplicateMode(hadTc);
         }
       } catch (err) {
         console.error('Error fetching document data:', err);
@@ -208,6 +291,23 @@ export function Documents() {
       if (match.leavingReason) setLeavingReason(match.leavingReason);
       if (match.behaviour) setConduct(match.behaviour);
       if (match.academicProgress) setProgress(match.academicProgress);
+
+      // Check whether this student ALREADY had a TC issued before selecting them now
+      const hadTc = Boolean(getStudentTcIssueInfo(match, documentLogs));
+      setStudentHadTcPriorToSelection(hadTc);
+
+      if (hadTc) {
+        setIsDuplicateMode(true);
+        const tcInfo = getStudentTcIssueInfo(match, documentLogs);
+        setDuplicateRemarks(
+          docLang === 'mr'
+            ? `सदर दाखल्याची पहिली प्रत दिनांक ${formatDate(tcInfo?.issuedDate || match.certificateDate || '')} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+            : `The original certificate was issued on ${formatDate(tcInfo?.issuedDate || match.certificateDate || '')}. As per parent\'s application reporting loss of original, this "DUPLICATE COPY" is issued.`
+        );
+      } else {
+        setIsDuplicateMode(false);
+        setDuplicateRemarks('');
+      }
     }
   };
 
@@ -304,7 +404,7 @@ export function Documents() {
       issuedDate: issueDate,
       academicYear: settings.academicYear || '2026-2027',
       issuedBy: 'Principal Office',
-      purpose: currentTab === 'bonafide' ? bonafidePurpose : leavingReason
+      purpose: currentTab === 'bonafide' ? bonafidePurpose : (currentTab === 'tc' && isDuplicateMode ? (duplicateRemarks || 'द्वितीय प्रत (Duplicate Copy) - मूळ प्रत गहाळ') : leavingReason)
     };
 
     // Update documentLogs in state immediately so student appears in issued list right away
@@ -313,11 +413,13 @@ export function Documents() {
       ...prev
     ]);
 
-    // If TC, also update student's certificateDate in state and database
+    const isDup = currentTab === 'tc' && isDuplicateMode;
+
+    // If TC, also update student's certificateDate in state and database (preserve original if duplicate)
     if (currentTab === 'tc') {
       const updatedStu = {
         ...selectedStudent,
-        certificateDate: issueDate,
+        certificateDate: isDup ? (selectedStudent.certificateDate || issueDate) : issueDate,
         leavingReason: leavingReason || selectedStudent.leavingReason
       };
       setSelectedStudent(updatedStu);
@@ -345,6 +447,10 @@ export function Documents() {
 
     // Trigger Print cleanly across sandboxed iframe and standalone tabs
     printCertificateElement('certificate-print-area', docTitle);
+    if (isDup) {
+      setNotification(docLang === 'mr' ? 'द्वितीय प्रत (Duplicate TC) ची नोंद जतन झाली व प्रिंट सुरू झाली!' : 'Duplicate TC recorded and print triggered!');
+      setTimeout(() => setNotification(null), 4000);
+    }
   };
 
   if (loading) {
@@ -676,14 +782,25 @@ export function Documents() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
-                          {issuedTypes.map((t, idx) => (
-                            <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                              {t === 'TC' ? 'T.C.' : t === 'BONAFIDE' ? 'बोनाफाईड' : 'निर्गम'}
-                            </span>
-                          ))}
-                          {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
-                        </div>
+                        {(() => {
+                          const tcInfo = getStudentTcIssueInfo(stu, documentLogs);
+                          return (
+                            <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                              {tcInfo && (
+                                <span className="px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 shadow-2xs">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-600 animate-pulse"></span>
+                                  {language === 'mr' ? `TC दिली (${formatDate(tcInfo.issuedDate || '')})` : `TC Issued (${formatDate(tcInfo.issuedDate || '')})`}
+                                </span>
+                              )}
+                              {issuedTypes.filter(t => t !== 'TC').map((t, idx) => (
+                                <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                  {t === 'BONAFIDE' ? 'बोनाफाईड' : 'निर्गम'}
+                                </span>
+                              ))}
+                              {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })
@@ -773,6 +890,49 @@ export function Documents() {
 
           {currentTab === 'tc' && (
             <>
+              {/* Copy Type Toggle (Original vs Duplicate) */}
+              <div className="sm:col-span-4 bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase">
+                    {language === 'mr' ? 'दाखला प्रत स्वरूप (Certificate Type):' : 'Certificate Type:'}
+                  </span>
+                  {(studentHadTcPriorToSelection || isDuplicateMode) && hasPreviousTc && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">
+                      {language === 'mr' ? 'यापूर्वी TC दिली आहे' : 'TC Previously Issued'}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-lg w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setIsDuplicateMode(false)}
+                    className={`flex-1 sm:flex-none py-1.5 px-3 rounded-md text-xs font-bold transition cursor-pointer text-center ${
+                      !isDuplicateMode ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {language === 'mr' ? 'मूळ प्रत (Original TC)' : 'Original Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDuplicateMode(true);
+                      if (!duplicateRemarks) {
+                        setDuplicateRemarks(
+                          docLang === 'mr'
+                            ? `सदर दाखल्याची पहिली प्रत दिनांक ${formatDate(studentTcInfo?.issuedDate || selectedStudent?.certificateDate || '')} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+                            : `The original certificate was issued on ${formatDate(studentTcInfo?.issuedDate || selectedStudent?.certificateDate || '')}. As per parent\'s application reporting loss of original, this "DUPLICATE COPY" is issued.`
+                        );
+                      }
+                    }}
+                    className={`flex-1 sm:flex-none py-1.5 px-3.5 rounded-md text-xs font-black transition cursor-pointer text-center flex items-center justify-center gap-1 ${
+                      isDuplicateMode ? 'bg-rose-700 text-white shadow-xs' : 'text-rose-700 hover:bg-rose-100/50'
+                    }`}
+                  >
+                    <span>★ {language === 'mr' ? 'द्वितीय प्रत (Duplicate TC)' : 'Duplicate TC'}</span>
+                  </button>
+                </div>
+              </div>
               <div className="sm:col-span-2">
                 <label className="block font-bold text-slate-700 uppercase mb-1">
                   शाळा सोडण्याचे कारण (Reason for Leaving):
@@ -957,6 +1117,108 @@ export function Documents() {
       {/* Quick Action & Live Certificate Preview / Print Canvas */}
       {selectedStudent ? (
         <div className="space-y-3">
+{/* Warning Alert Banner when Student already has a TC issued */}
+        {currentTab === 'tc' && (studentHadTcPriorToSelection || isDuplicateMode) && hasPreviousTc && selectedStudent && (
+          <div className="bg-gradient-to-r from-rose-50 via-amber-50 to-rose-50 border-2 border-rose-500 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5 print:hidden animate-in fade-in-50">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <AlertTriangle className="w-6 h-6 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-black uppercase tracking-wider bg-rose-600 text-white shadow-2xs">
+                      {language === 'mr' ? '⚠️ सावधान / Warning' : '⚠️ Warning'}
+                    </span>
+                    <h3 className="text-sm sm:text-base font-black text-rose-950">
+                      {language === 'mr' 
+                        ? 'या विद्यार्थ्याला यापूर्वी शाळा सोडल्याचा दाखला (T.C.) देण्यात आला आहे!' 
+                        : 'This student has already been issued a Transfer Certificate (T.C.)!'}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-rose-900 mt-1 font-medium">
+                    {language === 'mr' ? 'मूळ दाखला दिनांक: ' : 'Original TC Date: '}
+                    <strong className="font-bold underline text-rose-950 font-mono">
+                      {formatDate(studentTcInfo?.issuedDate || selectedStudent.certificateDate || '')}
+                    </strong>
+                    {selectedStudent.leavingReason && (
+                      <span> • {language === 'mr' ? 'कारण: ' : 'Reason: '}<strong className="text-rose-950">{selectedStudent.leavingReason}</strong></span>
+                    )}
+                    {studentTcInfo && studentTcInfo.copyCount > 1 && (
+                      <span className="ml-2 px-2 py-0.5 bg-purple-100 text-purple-800 rounded font-bold text-[10.5px]">
+                        {language === 'mr' ? `एकूण ${studentTcInfo.copyCount} प्रती जारी केलेल्या आहेत` : `${studentTcInfo.copyCount} copies issued`}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons inside Warning Box */}
+              <div className="flex items-center gap-2 w-full lg:w-auto shrink-0 flex-wrap sm:flex-nowrap">
+                <button
+                  type="button"
+                  id="btn-view-tc-history"
+                  onClick={() => setShowStudentTcHistory(true)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                >
+                  <History className="w-3.5 h-3.5 text-purple-600" />
+                  <span>{language === 'mr' ? 'दाखला इतिहास पहा' : 'View TC History'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-toggle-duplicate-mode"
+                  onClick={() => {
+                    const nextMode = !isDuplicateMode;
+                    setIsDuplicateMode(nextMode);
+                    if (nextMode && !duplicateRemarks) {
+                      setDuplicateRemarks(
+                        docLang === 'mr'
+                          ? `सदर दाखल्याची पहिली प्रत दिनांक ${formatDate(studentTcInfo?.issuedDate || selectedStudent.certificateDate || '')} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+                          : `The original certificate was issued on ${formatDate(studentTcInfo?.issuedDate || selectedStudent.certificateDate || '')}. As per parent\'s application reporting loss of original, this "DUPLICATE COPY" is issued.`
+                      );
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 transition shadow-2xs cursor-pointer ${
+                    isDuplicateMode 
+                      ? 'bg-rose-700 hover:bg-rose-800 text-white ring-2 ring-rose-400' 
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {isDuplicateMode 
+                      ? (language === 'mr' ? '✓ द्वितीय प्रत (Duplicate TC) मोड सक्रिय' : '✓ Duplicate TC Mode Active')
+                      : (language === 'mr' ? '👉 द्वितीय प्रत (Duplicate TC) मोड सुरू करा' : '👉 Enable Duplicate TC Mode')}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* If Duplicate Mode is Active, show remarks edit input */}
+            {isDuplicateMode && (
+              <div className="pt-2.5 border-t border-rose-300/80 bg-white/80 rounded-xl p-3 space-y-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1 text-xs font-bold text-rose-950">
+                  <span className="flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-rose-700" />
+                    <span>{language === 'mr' ? 'द्वितीय प्रत अधिकृत शेरा (दाखल्यावर रकाना १३ मध्ये छापला जाईल):' : 'Official Duplicate Remark (Printed in Row 13):'}</span>
+                  </span>
+                  <span className="text-[11px] text-rose-700 font-semibold">
+                    {language === 'mr' ? 'माध्यमिक शाळा संहितेनुसार' : 'As per Secondary Code'}
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  id="input-duplicate-remarks"
+                  value={duplicateRemarks}
+                  onChange={(e) => setDuplicateRemarks(e.target.value)}
+                  placeholder={docLang === 'mr' ? 'उदा. सदर दाखल्याची पहिली प्रत दिनांक ... रोजी दिली असून ती गहाळ झाल्याने...' : 'e.g. Original copy was issued on ... and reported lost...'}
+                  className="w-full px-3 py-2 bg-white border border-rose-300 rounded-lg text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+            )}
+          </div>
+        )}
           
           {/* Student & Document Summary Header Banner (Hidden in print) */}
           <div className="bg-slate-900 text-white rounded-xl p-3 sm:px-4 sm:py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-sm border border-slate-800 print:hidden">
@@ -1007,6 +1269,10 @@ export function Documents() {
                 progress={progress}
                 lang={docLang}
                 onEdit={() => setIsEditModalOpen(true)}
+                isDuplicate={isDuplicateMode}
+                duplicateRemarks={duplicateRemarks}
+                originalTcDate={studentTcInfo?.issuedDate || selectedStudent.certificateDate}
+                originalTcSerial={studentTcInfo?.tcLog?.purpose?.match(/TC-[0-9/]+/)?.[0] || ''}
               />
             )}
 
@@ -1060,6 +1326,24 @@ export function Documents() {
         />
       )}
 
+      {/* Student TC Issuance History Modal */}
+      <StudentTcHistoryModal
+        isOpen={showStudentTcHistory}
+        onClose={() => setShowStudentTcHistory(false)}
+        student={selectedStudent}
+        logs={documentLogs}
+        onIssueDuplicate={() => {
+          setIsDuplicateMode(true);
+          if (!duplicateRemarks) {
+            setDuplicateRemarks(
+              docLang === 'mr'
+                ? `सदर दाखल्याची पहिली प्रत दिनांक ${formatDate(studentTcInfo?.issuedDate || selectedStudent?.certificateDate || '')} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+                : `The original certificate was issued on ${formatDate(studentTcInfo?.issuedDate || selectedStudent?.certificateDate || '')}. As per parent\'s application reporting loss of original, this "DUPLICATE COPY" is issued.`
+            );
+          }
+        }}
+        lang={docLang}
+      />
     </div>
   );
 }

@@ -34,6 +34,10 @@ interface TransferCertificateProps {
   progress?: string;
   lang?: 'en' | 'mr';
   onEdit?: () => void;
+  isDuplicate?: boolean;
+  duplicateRemarks?: string;
+  originalTcDate?: string;
+  originalTcSerial?: string;
 }
 
 function parseStudentNameParts(student: Student, lang: 'en' | 'mr' = 'mr') {
@@ -153,7 +157,11 @@ export function TransferCertificate({
   conduct,
   progress,
   lang = 'mr',
-  onEdit
+  onEdit,
+  isDuplicate = false,
+  duplicateRemarks = '',
+  originalTcDate = '',
+  originalTcSerial = ''
 }: TransferCertificateProps) {
   const { settings } = useSettings();
 
@@ -176,8 +184,18 @@ export function TransferCertificate({
 
   return (
     <div className="a4-document-page bg-white text-slate-900 mx-auto w-[794px] max-w-[210mm] min-h-[1123px] print:min-h-0 print:h-[285mm] print:max-h-[288mm] p-4 sm:p-5 print:p-2 border-2 border-slate-900 relative font-serif print:border-2 print:border-black print:m-0 print:shadow-none shadow-xl group flex flex-col justify-between box-border overflow-hidden">
+      {/* Subtle Official Watermark across Certificate for Duplicate Copy */}
+      {isDuplicate && (
+        <div className="pointer-events-none select-none absolute inset-0 flex items-center justify-center overflow-hidden z-0 print:opacity-10 opacity-10">
+          <div className="transform -rotate-25 text-rose-900 font-black uppercase tracking-widest border-8 border-rose-900 px-8 py-5 rounded-3xl text-center">
+            <span className="block text-4xl sm:text-5xl font-black">DUPLICATE COPY</span>
+            <span className="block text-3xl sm:text-4xl mt-1 font-bold">द्वितीय प्रत</span>
+          </div>
+        </div>
+      )}
+
       {/* Decorative Outer Double Border */}
-      <div className="a4-inner-box border-2 border-slate-900 p-3 sm:p-4.5 print:p-2.5 flex-1 flex flex-col justify-between">
+      <div className="a4-inner-box border-2 border-slate-900 p-3 sm:p-4.5 print:p-2.5 flex-1 flex flex-col justify-between relative z-10">
         
         {/* Certificate Header */}
         <div className="text-center border-b-2 border-slate-900 pb-2">
@@ -225,8 +243,16 @@ export function TransferCertificate({
             </div>
           </div>
 
-          {/* Certificate Title Badge */}
-          <div className="mt-1.5">
+          {/* Certificate Title Badge with Duplicate Stamp if applicable */}
+          <div className="mt-1.5 flex flex-col items-center">
+            {isDuplicate && (
+              <div className="mb-1 inline-flex items-center gap-1.5 px-3.5 py-0.5 bg-rose-50 border-2 border-rose-700 rounded-sm shadow-xs font-sans">
+                <span className="w-2 h-2 rounded-full bg-rose-600 inline-block animate-pulse"></span>
+                <span className="text-xs sm:text-sm font-black text-rose-800 tracking-wider uppercase">
+                  {lang === 'mr' ? '★ द्वितीय प्रत (DUPLICATE COPY) ★' : '★ DUPLICATE COPY (द्वितीय प्रत) ★'}
+                </span>
+              </div>
+            )}
             <div className="inline-block border-2 border-slate-900 px-6 py-1 bg-slate-100 font-sans shadow-sm">
               <h2 className="text-base sm:text-lg font-black tracking-wider uppercase text-slate-950">
                 {lang === 'mr' && 'शाळा सोडल्याचा दाखला'}
@@ -492,7 +518,25 @@ export function TransferCertificate({
                   <div className="text-slate-950">{lang === 'mr' ? 'शेरा' : 'Remarks'}</div>
                 </td>
                 <td className="py-2.5 px-3 print:py-1.5 text-slate-950 font-medium break-words">
-                  {lang === 'mr' ? 'सर्व शालेय फी पूर्ण भरलेली आहे. कोणतीही बाकी नाही.' : 'All school dues paid in full. No dues pending.'}
+                  {isDuplicate ? (
+                    <div className="space-y-1">
+                      <p className="font-bold text-rose-950 text-xs sm:text-[13px] leading-snug">
+                        {lang === 'mr'
+                          ? `सदर दाखल्याची मूळ (पहिली) प्रत दिनांक ${formatDate(originalTcDate || student.certificateDate || issueDate)} रोजी दिली असून, ती गहाळ/हरवल्याचे पालकांच्या अर्जानुसार ही "द्वितीय प्रत (DUPLICATE COPY)" देण्यात येत आहे.`
+                          : `The original (1st) copy of this certificate was issued on ${formatDate(originalTcDate || student.certificateDate || issueDate)}. As per parent's application reporting loss of the original copy, this "DUPLICATE COPY" is issued.`}
+                      </p>
+                      {duplicateRemarks && (
+                        <p className="text-[11.5px] text-slate-800 italic">
+                          {duplicateRemarks}
+                        </p>
+                      )}
+                      <p className="text-[11px] text-slate-700">
+                        {lang === 'mr' ? 'सर्व शालेय फी पूर्ण भरलेली आहे. कोणतीही बाकी नाही.' : 'All school dues paid in full. No dues pending.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <span>{lang === 'mr' ? 'सर्व शालेय फी पूर्ण भरलेली आहे. कोणतीही बाकी नाही.' : 'All school dues paid in full. No dues pending.'}</span>
+                  )}
                 </td>
               </tr>
             </tbody>
