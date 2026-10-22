@@ -22,6 +22,7 @@ import { Badge } from '../common/Badge';
 import { formatDate } from '../../utils/dateUtils';
 import { useLanguage } from '../../context/LanguageContext';
 import { getStudentGender, getGenderLabel } from '../../utils/genderUtils';
+import { getLocalizedPreviousSchool } from '../../utils/devanagariUtils';
 
 interface StudentViewModalProps {
   student: Student | null;
@@ -70,8 +71,14 @@ export function StudentViewModal({
         {/* Quick Identity Banner */}
         <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center font-black text-xl">
-              {student.studentName?.charAt(0)?.toUpperCase() || 'S'}
+            <div className="w-14 h-14 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center font-black text-xl select-none">
+              {language === 'mr' 
+                ? (student.studentNameLocal?.trim().charAt(0) || student.studentName?.trim().charAt(0) || 'वि')
+                : (() => {
+                    const en = student.studentName?.trim() || 'Student';
+                    const c = en.charAt(0).toUpperCase();
+                    return /^[A-Z0-9]/.test(c) ? c : 'S';
+                  })()}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -299,7 +306,7 @@ export function StudentViewModal({
             <div className="space-y-2 text-xs">
               <div>
                 <span className="text-slate-500 block">{language === 'mr' ? 'मागील शाळेचे नाव:' : 'Previous School Attended:'}</span>
-                <span className="font-medium text-slate-800">{val(student.previousSchool)}</span>
+                <span className="font-medium text-slate-800">{getLocalizedPreviousSchool(student, language) || '-'}</span>
               </div>
               <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/50">
                 <div>

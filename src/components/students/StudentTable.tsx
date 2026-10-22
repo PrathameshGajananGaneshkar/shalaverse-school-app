@@ -154,7 +154,9 @@ export function StudentTable({
                           ? 'bg-pink-50 text-pink-700 border border-pink-200'
                           : 'bg-blue-50 text-blue-700 border border-blue-200'
                       }`}>
-                        {getStudentGender(student) === 'Female' ? '👧 मुलगी' : '👦 मुलगा'}
+                        {getStudentGender(student) === 'Female' 
+                          ? (language === 'mr' ? '👧 मुलगी' : '👧 Girl') 
+                          : (language === 'mr' ? '👦 मुलगा' : '👦 Boy')}
                       </span>
                     </div>
 

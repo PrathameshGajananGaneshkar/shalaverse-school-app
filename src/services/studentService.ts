@@ -21,7 +21,9 @@ import { generateStudentId } from '../utils/studentIdGenerator';
 import { documentService } from './documentService';
 import {
   idbGetAllStudents,
+  idbGetStudentsBySchool,
   idbSaveAllStudents,
+  idbSaveBulkStudents,
   idbClearStudents,
   idbDeleteStudent,
   idbPutStudent
@@ -76,7 +78,7 @@ export function isDemoStudent(s: Partial<Student> | null | undefined): boolean {
 }
 
 const VALID_SCHOOL_CLASSES: AdmissionClass[] = [
-  '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
+  '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
 ];
 
 function cleanFirestoreData<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -90,8 +92,8 @@ function cleanFirestoreData<T extends Record<string, any>>(obj: T): Partial<T> {
 }
 
 /**
- * Ensures all students belong to the school's active 5th to 12th classes.
- * Maps any legacy / unmapped classes into 10th, 11th, and 12th deterministically.
+ * Ensures all students belong to the school's active 1st to 12th classes.
+ * Maps any legacy / unmapped classes into valid classes deterministically.
  */
 function sanitizeStudentClasses(rawStudents: Student[]): Student[] {
   const needsAssignment: Student[] = [];
@@ -108,8 +110,10 @@ function sanitizeStudentClasses(rawStudents: Student[]): Student[] {
   // Sort by GR number for 100% deterministic distribution
   needsAssignment.sort((a, b) => (a.grNumber || '').localeCompare(b.grNumber || ''));
 
-  // Target classes 10th, 11th, 12th
-  const targetClasses: AdmissionClass[] = ['10th', '11th', '12th'];
+  // Target classes 1st to 12th
+  const targetClasses: AdmissionClass[] = [
+    '1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th'
+  ];
   const perClass = Math.ceil(needsAssignment.length / targetClasses.length);
   const assignmentMap = new Map<string, AdmissionClass>();
 
@@ -129,9 +133,406 @@ function sanitizeStudentClasses(rawStudents: Student[]): Student[] {
   });
 }
 
+const DEFAULT_SCHOOL_INITIAL_STUDENTS: Record<string, Omit<Student, 'id'>[]> = {
+  'school_27340901205': [
+    {
+      grNumber: '101',
+      studentId: '202627340101',
+      studentName: 'पाटील हर्षवर्धन उदय',
+      studentNameLocal: 'पाटील हर्षवर्धन उदय',
+      gender: 'Male',
+      genderLocal: 'मुलगा',
+      fatherName: 'उदय पाटील',
+      motherName: 'सुजाता',
+      admissionClass: '9th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-15',
+      birthDate: '2011-04-12',
+      birthPlace: 'कोल्हापूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Maratha (मराठा)',
+      subCaste: '96 Kuli',
+      uid: '458912345678',
+      mobile: '9822114455',
+      address: 'राजारामपुरी, कोल्हापूर',
+      previousSchool: 'प्राथमिक शाळा राजारामपुरी',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27340901205'
+    },
+    {
+      grNumber: '102',
+      studentId: '202627340102',
+      studentName: 'जाधव ऋतुजा संभाजी',
+      studentNameLocal: 'जाधव ऋतुजा संभाजी',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'संभाजी जाधव',
+      motherName: 'सारिका',
+      admissionClass: '10th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-16',
+      birthDate: '2010-09-24',
+      birthPlace: 'कोल्हापूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Maratha (मराठा)',
+      subCaste: '',
+      uid: '784512369852',
+      mobile: '9822336677',
+      address: 'शाहूपुरी, कोल्हापूर',
+      previousSchool: 'महानगरपालिका शाळा क्र. ५',
+      academicProgress: 'Excellent (उत्कृष्ट)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27340901205'
+    },
+    {
+      grNumber: '103',
+      studentId: '202627340103',
+      studentName: 'गायकवाड वेदांत अमर',
+      studentNameLocal: 'गायकवाड वेदांत अमर',
+      gender: 'Male',
+      genderLocal: 'मुलगा',
+      fatherName: 'अमर गायकवाड',
+      motherName: 'अनिता',
+      admissionClass: '8th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-17',
+      birthDate: '2012-01-18',
+      birthPlace: 'कोल्हापूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Nav-Bauddha (नवबौद्ध)',
+      subCaste: '',
+      uid: '985632147895',
+      mobile: '9822445566',
+      address: 'ताराबाई पार्क, कोल्हापूर',
+      previousSchool: 'विद्यामंदिर कोल्हापूर',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27340901205'
+    },
+    {
+      grNumber: '104',
+      studentId: '202627340104',
+      studentName: 'माने समृद्धी दिगंबर',
+      studentNameLocal: 'माने समृद्धी दिगंबर',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'दिगंबर माने',
+      motherName: 'पूनम',
+      admissionClass: '7th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-18',
+      birthDate: '2013-07-30',
+      birthPlace: 'कोल्हापूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Kunbi (कुणबी)',
+      subCaste: '',
+      uid: '321456987412',
+      mobile: '9822556677',
+      address: 'कसबा बावडा, कोल्हापूर',
+      previousSchool: 'जि. प. शाळा बावडा',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27340901205'
+    },
+    {
+      grNumber: '105',
+      studentId: '202627340105',
+      studentName: 'सावंत रोहन तानाजी',
+      studentNameLocal: 'सावंत रोहन तानाजी',
+      gender: 'Male',
+      genderLocal: 'मुलगा',
+      fatherName: 'तानाजी सावंत',
+      motherName: 'वैशाली',
+      admissionClass: '12th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-19',
+      birthDate: '2008-11-15',
+      birthPlace: 'कोल्हापूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Maratha (मराठा)',
+      subCaste: '',
+      uid: '654789321456',
+      mobile: '9822667788',
+      address: 'मंगळवार पेठ, कोल्हापूर',
+      previousSchool: 'शाहू हायस्कूल कोल्हापूर',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27340901205'
+    }
+  ],
+  'school_27251403418': [
+    {
+      grNumber: '201',
+      studentId: '202627250201',
+      studentName: 'कुलकर्णी श्रेया मिलिंद',
+      studentNameLocal: 'कुलकर्णी श्रेया मिलिंद',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'मिलिंद कुलकर्णी',
+      motherName: 'अनुराधा',
+      admissionClass: '10th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-15',
+      birthDate: '2010-05-18',
+      birthPlace: 'पुणे',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Brahmin (ब्राह्मण)',
+      subCaste: '',
+      uid: '987456123012',
+      mobile: '9823011223',
+      address: 'शनिवार पेठ, पुणे',
+      previousSchool: 'कन्या शाळा पुणे',
+      academicProgress: 'Excellent (उत्कृष्ट)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27251403418'
+    },
+    {
+      grNumber: '202',
+      studentId: '202627250202',
+      studentName: 'पवार अनुष्का सचिन',
+      studentNameLocal: 'पवार अनुष्का सचिन',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'सचिन पवार',
+      motherName: 'रुपाली',
+      admissionClass: '9th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-16',
+      birthDate: '2011-08-22',
+      birthPlace: 'पुणे',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Maratha (मराठा)',
+      subCaste: '',
+      uid: '874512369023',
+      mobile: '9823022334',
+      address: 'कोथरूड, पुणे',
+      previousSchool: 'सरस्वती विद्यालय पुणे',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27251403418'
+    },
+    {
+      grNumber: '203',
+      studentId: '202627250203',
+      studentName: 'शिंदे तनिष्का नितीन',
+      studentNameLocal: 'शिंदे तनिष्का नितीन',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'नितीन शिंदे',
+      motherName: 'प्रियंका',
+      admissionClass: '8th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-17',
+      birthDate: '2012-03-14',
+      birthPlace: 'पुणे',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Kunbi (कुणबी)',
+      subCaste: '',
+      uid: '761234985034',
+      mobile: '9823033445',
+      address: 'शिवाजीनगर, पुणे',
+      previousSchool: 'प्राथमिक कन्या शाळा',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27251403418'
+    },
+    {
+      grNumber: '204',
+      studentId: '202627250204',
+      studentName: 'जोशी ईश्वरी प्रशांत',
+      studentNameLocal: 'जोशी ईश्वरी प्रशांत',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'प्रशांत जोशी',
+      motherName: 'मेघा',
+      admissionClass: '6th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-18',
+      birthDate: '2014-10-09',
+      birthPlace: 'पुणे',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Brahmin (ब्राह्मण)',
+      subCaste: '',
+      uid: '654123987045',
+      mobile: '9823044556',
+      address: 'डेक्कन, पुणे',
+      previousSchool: 'ज्ञान प्रबोधिनी पुणे',
+      academicProgress: 'Excellent (उत्कृष्ट)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27251403418'
+    }
+  ],
+  'school_27091502214': [
+    {
+      grNumber: '301',
+      studentId: '202627090301',
+      studentName: 'वाघमारे शुभम ज्ञानेश्वर',
+      studentNameLocal: 'वाघमारे शुभम ज्ञानेश्वर',
+      gender: 'Male',
+      genderLocal: 'मुलगा',
+      fatherName: 'ज्ञानेश्वर वाघमारे',
+      motherName: 'मंगला',
+      admissionClass: '10th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-15',
+      birthDate: '2010-06-25',
+      birthPlace: 'नागपूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Nav-Bauddha (नवबौद्ध)',
+      subCaste: '',
+      uid: '456789123056',
+      mobile: '9824055667',
+      address: 'रेशीमबाग, नागपूर',
+      previousSchool: 'महापालिका शाळा नागपूर',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27091502214'
+    },
+    {
+      grNumber: '302',
+      studentId: '202627090302',
+      studentName: 'मेस्राम प्राची गजानन',
+      studentNameLocal: 'मेस्राम प्राची गजानन',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'गजानन मेस्राम',
+      motherName: 'लता',
+      admissionClass: '9th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-16',
+      birthDate: '2011-12-10',
+      birthPlace: 'नागपूर',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Gond (गोंड - ST)',
+      subCaste: '',
+      uid: '345678912067',
+      mobile: '9824066778',
+      address: 'धरमपेठ, नागपूर',
+      previousSchool: 'प्राथमिक शाळा धरमपेठ',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27091502214'
+    }
+  ],
+  'school_27200801533': [
+    {
+      grNumber: '401',
+      studentId: '202627200401',
+      studentName: 'खैरनार यश विनायक',
+      studentNameLocal: 'खैरनार यश विनायक',
+      gender: 'Male',
+      genderLocal: 'मुलगा',
+      fatherName: 'विनायक खैरनार',
+      motherName: 'मनिषा',
+      admissionClass: '9th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-15',
+      birthDate: '2011-07-19',
+      birthPlace: 'नाशिक',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Maratha (मराठा)',
+      subCaste: '',
+      uid: '234567891078',
+      mobile: '9825077889',
+      address: 'कॉलेज रोड, नाशिक',
+      previousSchool: 'टिळक प्राथमिक शाळा नाशिक',
+      academicProgress: 'Good (चांगली)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27200801533'
+    },
+    {
+      grNumber: '402',
+      studentId: '202627200402',
+      studentName: 'सोनवणे सिद्धी प्रकाश',
+      studentNameLocal: 'सोनवणे सिद्धी प्रकाश',
+      gender: 'Female',
+      genderLocal: 'मुलगी',
+      fatherName: 'प्रकाश सोनवणे',
+      motherName: 'शीतल',
+      admissionClass: '10th',
+      admissionYear: '2026-2027',
+      admissionDate: '2026-06-16',
+      birthDate: '2010-03-05',
+      birthPlace: 'नाशिक',
+      nationality: 'Indian (भारतीय)',
+      motherTongue: 'मराठी',
+      religion: 'Hindu (हिंदू)',
+      caste: 'Kunbi (कुणबी)',
+      subCaste: '',
+      uid: '123456789089',
+      mobile: '9825088990',
+      address: 'गंगापूर रोड, नाशिक',
+      previousSchool: 'नाशिक शिक्षण संस्था शाळा',
+      academicProgress: 'Excellent (उत्कृष्ट)',
+      behaviour: 'Good (उत्तम)',
+      leavingReason: '',
+      certificateDate: '',
+      schoolId: 'school_27200801533'
+    }
+  ]
+};
+
 export const studentService = {
   // Get all students from Firestore / IndexedDB with ultra-fast responsiveness
-  async getAllStudents(): Promise<Student[]> {
+  async getAllStudents(schoolIdFilter?: string): Promise<Student[]> {
+    const effectiveSchoolId = schoolIdFilter !== undefined
+      ? schoolIdFilter
+      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119');
+
+    const filterBySchool = (list: Student[]) => {
+      if (effectiveSchoolId === 'ALL') return list;
+      return list.filter(s => s.schoolId === effectiveSchoolId || (!s.schoolId && effectiveSchoolId === 'school_27070200119'));
+    };
+
     // Proactively purge legacy demo students in background if not already marked purged
     if (typeof window !== 'undefined' && localStorage.getItem('shalaverse_demo_purged_permanently') !== 'true') {
       void this.purgeAllDemoStudentsForever().catch(() => {});
@@ -139,25 +540,20 @@ export const studentService = {
 
     const isCleared = typeof window !== 'undefined' ? localStorage.getItem('shalaverse_cleared_at') : null;
 
-    // 1. Fast path: load from IndexedDB first (< 10ms)
-    const idbStudents = await idbGetAllStudents();
-    const cleanIdbStudents = idbStudents.filter(s => !isDemoStudent(s));
-
-    if (cleanIdbStudents.length !== idbStudents.length) {
-      // Detected demo records in IndexedDB -> immediately save cleaned version and run purge
-      await idbSaveAllStudents(cleanIdbStudents);
-      void this.purgeAllDemoStudentsForever().catch(() => {});
+    // 1. Ultra-Fast Path: load from IndexedDB scoped to this school (< 3ms)
+    let idbStudents: Student[] = [];
+    if (effectiveSchoolId === 'ALL') {
+      idbStudents = await idbGetAllStudents();
+    } else {
+      idbStudents = await idbGetStudentsBySchool(effectiveSchoolId);
     }
+    const cleanIdbStudents = idbStudents.filter(s => !isDemoStudent(s));
 
     if (cleanIdbStudents.length > 0) {
       if (isCleared) {
         localStorage.removeItem('shalaverse_cleared_at');
       }
       const sanitizedIdb = sanitizeStudentClasses(cleanIdbStudents);
-      if (sanitizedIdb !== cleanIdbStudents) {
-        idbSaveAllStudents(sanitizedIdb).catch(() => {});
-      }
-      // Sort by GR Number
       sanitizedIdb.sort((a, b) => {
         const grA = parseInt(a.grNumber || '0', 10);
         const grB = parseInt(b.grNumber || '0', 10);
@@ -166,25 +562,39 @@ export const studentService = {
         }
         return (a.grNumber || '').localeCompare(b.grNumber || '');
       });
-      return sanitizedIdb;
+      return filterBySchool(sanitizedIdb);
     }
 
-    // If IndexedDB is empty and an explicit clear was done, DO NOT re-pull old deleted records from Firestore!
+    // If explicit clear was done and IDB is empty, do not re-pull deleted records
     if (isCleared) {
       return [];
     }
 
-    // 2. Fetch from Firestore with a 2.5-second timeout to avoid UI blocking
+    // 2. Fetch from Firestore (Scoped query by schoolId to avoid downloading 1000 schools at once!)
     try {
-      const fetchPromise = getDocs(collection(db, COLLECTION_NAME));
+      let q;
+      if (effectiveSchoolId !== 'ALL') {
+        q = query(collection(db, COLLECTION_NAME), where('schoolId', '==', effectiveSchoolId));
+      } else {
+        q = collection(db, COLLECTION_NAME);
+      }
+
+      const fetchPromise = getDocs(q);
       const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
-      const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+      let snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+
+      // Fallback for default initial school if schoolId was unset on legacy records
+      if ((!snapshot || snapshot.empty) && effectiveSchoolId === 'school_27070200119') {
+        const fallbackSnap = await getDocs(collection(db, COLLECTION_NAME));
+        if (fallbackSnap && !fallbackSnap.empty) {
+          snapshot = fallbackSnap;
+        }
+      }
       
       if (snapshot && !snapshot.empty) {
         const rawDocs = snapshot.docs;
         const demoDocs = rawDocs.filter((d: any) => isDemoStudent({ id: d.id, ...d.data() }));
         if (demoDocs.length > 0) {
-          // Delete demo docs from Firestore immediately in background
           void this.purgeAllDemoStudentsForever().catch(() => {});
         }
 
@@ -206,44 +616,136 @@ export const studentService = {
           return (a.grNumber || '').localeCompare(b.grNumber || '');
         });
 
-        // Save to IndexedDB
-        await idbSaveAllStudents(sanitizedStudents);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sanitizedStudents.slice(0, 300)));
-        } catch {}
-        return sanitizedStudents;
-      } else if (snapshot && snapshot.empty) {
-        await idbClearStudents();
-        try {
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify([]));
-        } catch {}
-        return [];
+        // Save to IndexedDB bulk
+        await idbSaveBulkStudents(sanitizedStudents);
+        return filterBySchool(sanitizedStudents);
       }
     } catch (err) {
       console.warn('Firestore fetch failed, checking local cache:', err);
     }
 
-    // Fallback: Check local storage
+    // 3. Fallback: Check local storage
     const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (cached !== null) {
       try {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
           const cleaned = parsed.filter((s: any) => !isDemoStudent(s));
-          if (cleaned.length !== parsed.length) {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleaned));
-          }
           if (cleaned.length > 0) {
-            await idbSaveAllStudents(cleaned);
-            return cleaned;
+            const bySchool = filterBySchool(cleaned);
+            if (bySchool.length > 0) return bySchool;
           }
         }
-      } catch {
-        // ignore parse error
-      }
+      } catch {}
+    }
+
+    // 4. If no students exist for this default school and never cleared, seed default students!
+    if (DEFAULT_SCHOOL_INITIAL_STUDENTS[effectiveSchoolId] && !isCleared) {
+      const seeded = DEFAULT_SCHOOL_INITIAL_STUDENTS[effectiveSchoolId].map((s, idx) => ({
+        ...s,
+        id: `stu_${effectiveSchoolId}_${idx + 1}`
+      })) as Student[];
+      await idbSaveBulkStudents(seeded);
+      return seeded;
     }
 
     return [];
+  },
+
+  // Helper to quickly populate sample students for any school
+  async seedSampleStudentsForSchool(schoolId: string, schoolName?: string): Promise<Student[]> {
+    const list = [
+      {
+        grNumber: '501',
+        studentId: `2026${schoolId.replace(/\D/g, '').slice(-4) || '5001'}01`,
+        studentName: 'पाटील प्रथमेश संजय',
+        studentNameLocal: 'पाटील प्रथमेश संजय',
+        gender: 'Male' as const,
+        genderLocal: 'मुलगा',
+        fatherName: 'संजय पाटील',
+        motherName: 'मनिषा',
+        admissionClass: '9th' as const,
+        admissionYear: '2026-2027',
+        admissionDate: '2026-06-15',
+        birthDate: '2011-05-10',
+        birthPlace: 'महाराष्ट्र',
+        nationality: 'Indian (भारतीय)',
+        motherTongue: 'मराठी',
+        religion: 'Hindu (हिंदू)',
+        caste: 'Maratha (मराठा)',
+        subCaste: '',
+        uid: '458912345678',
+        mobile: '9822112233',
+        address: schoolName || 'महाराष्ट्र',
+        previousSchool: 'प्राथमिक शाळा',
+        academicProgress: 'Good (चांगली)',
+        behaviour: 'Good (उत्तम)',
+        leavingReason: '',
+        certificateDate: '',
+        schoolId
+      },
+      {
+        grNumber: '502',
+        studentId: `2026${schoolId.replace(/\D/g, '').slice(-4) || '5001'}02`,
+        studentName: 'देशमुख अनन्या राहुल',
+        studentNameLocal: 'देशमुख अनन्या राहुल',
+        gender: 'Female' as const,
+        genderLocal: 'मुलगी',
+        fatherName: 'राहुल देशमुख',
+        motherName: 'स्वाती',
+        admissionClass: '10th' as const,
+        admissionYear: '2026-2027',
+        admissionDate: '2026-06-16',
+        birthDate: '2010-08-20',
+        birthPlace: 'महाराष्ट्र',
+        nationality: 'Indian (भारतीय)',
+        motherTongue: 'मराठी',
+        religion: 'Hindu (हिंदू)',
+        caste: 'Maratha (मराठा)',
+        subCaste: '',
+        uid: '784512369852',
+        mobile: '9822445566',
+        address: schoolName || 'महाराष्ट्र',
+        previousSchool: 'कन्या विद्यालय',
+        academicProgress: 'Excellent (उत्कृष्ट)',
+        behaviour: 'Good (उत्तम)',
+        leavingReason: '',
+        certificateDate: '',
+        schoolId
+      },
+      {
+        grNumber: '503',
+        studentId: `2026${schoolId.replace(/\D/g, '').slice(-4) || '5001'}03`,
+        studentName: 'जाधव रोहन प्रकाश',
+        studentNameLocal: 'जाधव रोहन प्रकाश',
+        gender: 'Male' as const,
+        genderLocal: 'मुलगा',
+        fatherName: 'प्रकाश जाधव',
+        motherName: 'सुनीता',
+        admissionClass: '8th' as const,
+        admissionYear: '2026-2027',
+        admissionDate: '2026-06-17',
+        birthDate: '2012-02-14',
+        birthPlace: 'महाराष्ट्र',
+        nationality: 'Indian (भारतीय)',
+        motherTongue: 'मराठी',
+        religion: 'Hindu (हिंदू)',
+        caste: 'Kunbi (कुणबी)',
+        subCaste: '',
+        uid: '985632147895',
+        mobile: '9822778899',
+        address: schoolName || 'महाराष्ट्र',
+        previousSchool: 'जि. प. शाळा',
+        academicProgress: 'Good (चांगली)',
+        behaviour: 'Good (उत्तम)',
+        leavingReason: '',
+        certificateDate: '',
+        schoolId
+      }
+    ];
+
+    await this.importBackupData(list);
+    return await this.getAllStudents(schoolId);
   },
 
   // Get student by Firestore ID or studentId
@@ -285,8 +787,11 @@ export const studentService = {
       ? studentData.studentId.trim() 
       : generateStudentId(studentData.grNumber, studentData.admissionYear);
 
+    const activeSchoolId = (typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119';
+
     const studentPayload: Omit<Student, 'id'> = {
       ...studentData,
+      schoolId: studentData.schoolId || activeSchoolId,
       studentId: finalStudentId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -707,6 +1212,7 @@ export const studentService = {
 
     // Fast normalization of records
     const nowIso = new Date().toISOString();
+    const activeSchoolId = (typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119';
     const preparedList = students.map((student, idx) => {
       const { id, ...dataWithoutId } = student as any;
       const grNumber = String(dataWithoutId.grNumber || '').trim() || `${1000 + idx + 1}`;
@@ -715,7 +1221,7 @@ export const studentService = {
       const payload: Omit<Student, 'id'> = {
         fatherName: '',
         motherName: '',
-        admissionClass: '5th',
+        admissionClass: dataWithoutId.admissionClass || '1st',
         admissionYear: '2025-2026',
         admissionDate: '2025-06-16',
         birthDate: '2015-05-10',
@@ -733,6 +1239,7 @@ export const studentService = {
         behaviour: 'Good',
         leavingReason: '',
         certificateDate: '',
+        schoolId: dataWithoutId.schoolId || activeSchoolId,
         ...dataWithoutId,
         grNumber,
         studentId: dataWithoutId.studentId || `20252704020${(100 + idx + 1).toString().padStart(4, '0')}`,

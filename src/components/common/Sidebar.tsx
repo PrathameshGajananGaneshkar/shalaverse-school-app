@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
@@ -14,6 +14,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSettings } from '../../context/SettingsContext';
+import { useSchool } from '../../context/SchoolContext';
+import { Crown } from 'lucide-react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -24,7 +26,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { logout } = useAuth();
   const { t, language } = useLanguage();
   const { settings } = useSettings();
+  const { isSuperAdmin, currentSchool } = useSchool();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isSuperAdminPage = location.pathname === '/super-admin';
 
   const handleLogout = async () => {
     try {
@@ -36,6 +42,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   };
 
   const navItems = [
+    ...(isSuperAdmin ? [{
+      to: '/super-admin',
+      label: language === 'mr' ? '👑 सुपर ॲडमिन पॅनेल' : '👑 Super Admin Hub',
+      icon: Crown,
+      id: 'nav-super-admin',
+      isSuper: true
+    }] : []),
     {
       to: '/dashboard',
       label: t('dashboard'),
@@ -67,7 +80,9 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     },
     {
       to: '/settings',
-      label: t('settings'),
+      label: isSuperAdmin 
+        ? (language === 'mr' ? '⚙️ सुपर ॲडमिन सेटिंग्ज' : '⚙️ Super Admin Settings')
+        : t('settings'),
       icon: Settings,
       id: 'nav-settings'
     },
@@ -114,16 +129,50 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* School Snapshot Pill */}
-        <div className="px-4 py-3 mx-3 my-2 rounded-lg bg-slate-800/60 border border-slate-700/60">
-          <p className="text-xs font-semibold text-slate-200 truncate">
-            {language === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName}
-          </p>
-          <div className="flex items-center justify-between mt-1 text-[11px] text-slate-400">
-            <span>{language === 'mr' ? 'युडायस' : 'UDISE'}: {settings.udiseNumber}</span>
-            <span className="text-emerald-400 font-bold">{language === 'mr' ? 'सक्रिय' : 'Online'}</span>
+        {/* Context Badge in Sidebar: On Super Admin page, show Super Admin Hub badge; On school pages, show active school pill */}
+        {isSuperAdminPage ? (
+          <div className="px-4 py-3 mx-3 my-2 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-1">
+            <div className="flex items-center justify-between text-[10px] font-bold">
+              <span className="text-amber-400 uppercase tracking-wider flex items-center gap-1.5 font-black">
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span>{language === 'mr' ? 'सुपर ॲडमिन केंद्र' : 'Super Admin Hub'}</span>
+              </span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{language === 'mr' ? 'मालक' : 'Owner'}</span>
+              </span>
+            </div>
+            <p className="text-xs font-black text-white truncate">
+              {language === 'mr' ? 'सर्व शाळांचे केंद्रीय नियंत्रण' : 'All Schools Management'}
+            </p>
+            <p className="text-[10px] text-amber-300/80 font-mono">
+              {language === 'mr' ? 'प्लॅटफॉर्म मालक पॅनल' : 'Platform Owner Panel'}
+            </p>
           </div>
-        </div>
+        ) : currentSchool ? (
+          <div className="px-4 py-3 mx-3 my-2 rounded-xl bg-slate-800/80 border border-slate-700/80 space-y-1">
+            <div className="flex items-center justify-between text-[10px] font-bold">
+              <span className="text-blue-400 uppercase tracking-wider flex items-center gap-1">
+                <span>🏫</span>
+                <span>{language === 'mr' ? 'चालू शाळा' : 'Active School'}</span>
+              </span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{language === 'mr' ? 'सक्रिय' : 'Online'}</span>
+              </span>
+            </div>
+            <p className="text-xs font-bold text-white truncate" title={currentSchool.schoolNameLocal || currentSchool.schoolName}>
+              {language === 'mr' 
+                ? (currentSchool.schoolNameLocal || currentSchool.schoolName) 
+                : (currentSchool.schoolName && !/^[\u0900-\u097F]/.test(currentSchool.schoolName) 
+                    ? currentSchool.schoolName 
+                    : 'Active School Portal')}
+            </p>
+            <p className="text-[10px] text-slate-400 font-mono">
+              UDISE: {currentSchool.udiseNumber || '-'}
+            </p>
+          </div>
+        ) : null}
 
         {/* Navigation Items */}
         <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
@@ -137,9 +186,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 }}
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-blue-700 text-white font-bold shadow-xs'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                    (item as any).isSuper
+                      ? (isActive
+                          ? 'bg-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                          : 'bg-amber-950/40 text-amber-300 border border-amber-500/30 hover:bg-amber-900/50 hover:text-white font-bold')
+                      : (isActive
+                          ? 'bg-blue-700 text-white font-bold shadow-xs'
+                          : 'text-slate-300 hover:text-white hover:bg-slate-800/80')
                   }`
                 }
               >

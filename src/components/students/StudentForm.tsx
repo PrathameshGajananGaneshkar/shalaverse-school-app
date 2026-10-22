@@ -44,7 +44,7 @@ export function StudentForm({
     grNumber: initialData?.grNumber || '',
     admissionYear: initialData?.admissionYear || settings.academicYear || '2026-2027',
     admissionDate: initialData?.admissionDate || new Date().toISOString().split('T')[0],
-    admissionClass: (initialData?.admissionClass as AdmissionClass) || '9th',
+    admissionClass: (initialData?.admissionClass as AdmissionClass) || '1st',
 
     studentName: initialData?.studentName || '',
     studentNameLocal: initialData?.studentNameLocal || '',
@@ -254,21 +254,23 @@ export function StudentForm({
             {isEditing ? t('editStudent') : t('addStudent')}
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            General Register (G.R.) Entry Form • bilingual English & Marathi / Devanagari support
+            {language === 'mr' 
+              ? 'जनरल रजिस्टर (G.R.) नोंदणी फॉर्म • इंग्रजी व मराठी द्विभाषिक सपोर्ट' 
+              : 'General Register (G.R.) Entry Form • Bilingual English & Marathi Support'}
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={autoFillMarathi}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-xs font-bold hover:bg-orange-100 transition shadow-xs"
-            title="Auto-fill Marathi names and terms from English"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-800 text-xs font-bold hover:bg-orange-100 transition shadow-xs cursor-pointer"
+            title={language === 'mr' ? 'इंग्रजीतून मराठी नावे स्वयंचलित भरा' : 'Auto-fill Marathi names from English'}
           >
             <Sparkles className="w-3.5 h-3.5 text-orange-600" />
-            <span>मराठी नाव स्वयंचलित भरा</span>
+            <span>{language === 'mr' ? 'मराठी नाव स्वयंचलित भरा' : 'Auto-fill Marathi Names'}</span>
           </button>
           <span className="hidden sm:inline-block text-xs font-semibold text-blue-900 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
-            Academic Year: {settings.academicYear || '2026-2027'}
+            {language === 'mr' ? 'शैक्षणिक वर्ष: ' : 'Academic Year: '}{settings.academicYear || '2026-2027'}
           </span>
         </div>
       </div>
@@ -393,7 +395,7 @@ export function StudentForm({
             >
               {CLASS_OPTIONS.map((cls) => (
                 <option key={cls} value={cls}>
-                  Class {cls}
+                  {language === 'mr' ? `इयत्ता ${cls}` : `Class ${cls}`}
                 </option>
               ))}
             </select>

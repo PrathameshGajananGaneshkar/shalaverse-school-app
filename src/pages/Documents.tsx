@@ -100,9 +100,12 @@ export const getIssuedTypesForStudent = (student: Student, logs: DocumentLog[]):
   return Array.from(set);
 };
 
+import { useSchool } from '../context/SchoolContext';
+
 export function Documents() {
   const { t, language } = useLanguage();
   const { settings } = useSettings();
+  const { currentSchool } = useSchool();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -214,9 +217,10 @@ export function Documents() {
     async function loadData() {
       setLoading(true);
       try {
+        const activeId = currentSchool?.id;
         const [studentList, logs] = await Promise.all([
-          studentService.getAllStudents(),
-          documentService.getDocumentLogs()
+          studentService.getAllStudents(activeId),
+          documentService.getDocumentLogs(activeId)
         ]);
         setStudents(studentList);
         let validLogs: DocumentLog[] = [];
@@ -281,7 +285,7 @@ export function Documents() {
       }
     }
     loadData();
-  }, [paramStudentId]);
+  }, [paramStudentId, currentSchool?.id]);
 
   const handleSelectStudent = (id: string) => {
     setSelectedStudentId(id);

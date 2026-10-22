@@ -36,10 +36,16 @@ function isDemoDocLog(log: DocumentLog): boolean {
 
 export const documentService = {
   async logDocumentIssue(log: Omit<DocumentLog, 'id'>): Promise<void> {
+    const activeSchoolId = log.schoolId || (typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119';
+    const logWithSchool = {
+      ...log,
+      schoolId: activeSchoolId
+    };
+
     if (!isFirestoreQuotaExceeded()) {
       try {
         await addDoc(collection(db, COLLECTION_NAME), {
-          ...log,
+          ...logWithSchool,
           serverCreatedAt: serverTimestamp()
         });
       } catch (err) {
@@ -51,15 +57,24 @@ export const documentService = {
     }
 
     // Save locally as fallback
-    const current = await this.getDocumentLogs();
+    const current = await this.getDocumentLogs('ALL');
     const newLog: DocumentLog = {
-      ...log,
+      ...logWithSchool,
       id: `doc_${Date.now()}`
     };
     localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify([newLog, ...current]));
   },
 
-  async getDocumentLogs(): Promise<DocumentLog[]> {
+  async getDocumentLogs(schoolIdFilter?: string): Promise<DocumentLog[]> {
+    const effectiveSchoolId = schoolIdFilter !== undefined
+      ? schoolIdFilter
+      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119');
+
+    const filterBySchool = (list: DocumentLog[]) => {
+      if (effectiveSchoolId === 'ALL') return list;
+      return list.filter(l => l.schoolId === effectiveSchoolId || (!l.schoolId && effectiveSchoolId === 'school_27070200119'));
+    };
+
     if (!isFirestoreQuotaExceeded()) {
       try {
         const q = query(collection(db, COLLECTION_NAME), orderBy('issuedDate', 'desc'));
@@ -72,7 +87,7 @@ export const documentService = {
             }))
             .filter(l => !isDemoDocLog(l));
           localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(logs));
-          return logs;
+          return filterBySchool(logs);
         }
       } catch (err) {
         if (isQuotaExceededError(err)) {
@@ -91,7 +106,7 @@ export const documentService = {
           if (cleaned.length !== parsed.length) {
             localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(cleaned));
           }
-          return cleaned;
+          return filterBySchool(cleaned);
         }
       } catch {
         // ignore

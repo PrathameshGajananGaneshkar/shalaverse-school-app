@@ -449,6 +449,42 @@ const DEVANAGARI_TO_ENGLISH_MAP: Record<string, string> = {
   'जि. प. प्राथमिक शाळा': 'Z. P. Primary School',
   'जिल्हा परिषद उच्च प्राथमिक शाळा': 'Zilla Parishad Upper Primary School',
   'जि. प. उच्च प्राथमिक शाळा': 'Z. P. Upper Primary School',
+  'प्राथमिक शाळा': 'Primary School',
+  'प्राथमिक शाळा राजारामपुरी': 'Primary School, Rajarampuri',
+  'प्राथमिक शाळा धरमपेठ': 'Primary School, Dharampeth',
+  'प्राथमिक कन्या शाळा': 'Primary Girls School',
+  'कन्या शाळा': 'Girls School',
+  'कन्या शाळा पुणे': 'Girls School, Pune',
+  'कन्या विद्यालय': 'Girls High School',
+  'कन्या विद्यालय पुणे': 'Girls High School, Pune',
+  'जि. प. शाळा': 'Z. P. Primary School',
+  'जि.प. शाळा': 'Z. P. Primary School',
+  'जि. प. शाळा बावडा': 'Z. P. School, Bavda',
+  'महानगरपालिका शाळा': 'Municipal School',
+  'महानगरपालिका शाळा क्र. ५': 'Municipal School No. 5',
+  'मनपा शाळा': 'Municipal School',
+  'विद्यामंदिर': 'Vidyamandir',
+  'विद्यामंदिर कोल्हापूर': 'Vidyamandir, Kolhapur',
+  'शाहू हायस्कूल': 'Shahu High School',
+  'शाहू हायस्कूल कोल्हापूर': 'Shahu High School, Kolhapur',
+  'सरस्वती विद्यालय': 'Saraswati Vidyalaya',
+  'सरस्वती विद्यालय पुणे': 'Saraswati Vidyalaya, Pune',
+  'ज्ञान प्रबोधिनी': 'Jnana Prabodhini',
+  'ज्ञान प्रबोधिनी पुणे': 'Jnana Prabodhini, Pune',
+  'महापालिका शाळा': 'Municipal School',
+  'महापालिका शाळा नागपूर': 'Municipal School, Nagpur',
+  'टिळक प्राथमिक शाळा': 'Tilak Primary School',
+  'टिळक प्राथमिक शाळा नाशिक': 'Tilak Primary School, Nashik',
+  'नाशिक शिक्षण संस्था शाळा': 'Nashik Shikshan Sanstha School',
+  'माध्यमिक शाळा': 'Secondary School',
+  'माध्यमिक विद्यालय': 'Secondary School',
+  'उच्च प्राथमिक शाळा': 'Upper Primary School',
+  'उच्च माध्यमिक शाळा': 'Higher Secondary School',
+  'कनिष्ठ महाविद्यालय': 'Junior College',
+  'महाविद्यालय': 'College',
+  'हायस्कूल': 'High School',
+  'प्राथमिक': 'Primary',
+  'शाळा': 'School',
   'आदर्श हायस्कूल': 'Adarsh High School',
   'छत्रपती शाहू विद्यालय': 'Chatrapati Shahu Vidyalaya',
   'सरस्वती बाल मंदिर': 'Saraswati Bal Mandir',
@@ -504,7 +540,10 @@ export function devanagariToLatin(devText: string): string {
     [/ज्ञ/g, 'Dny'],
     [/क्ष/g, 'Ksh'],
     [/श्र/g, 'Shr'],
+    [/श्री/g, 'Shri'],
     [/त्र/g, 'Tr'],
+    [/प्रा/g, 'Pra'],
+    [/प्र/g, 'Pr'],
 
     // Independent Vowels
     [/अं/g, 'An'],
@@ -543,6 +582,7 @@ export function devanagariToLatin(devText: string): string {
     [/ध्/g, 'dh'], [/ध/g, 'dh'],
     [/द्/g, 'd'], [/द/g, 'd'],
     [/न्/g, 'n'], [/न/g, 'n'],
+    [/प्/g, 'p'], [/प/g, 'p'],
     [/फ्/g, 'ph'], [/फ/g, 'ph'],
     [/ब्/g, 'b'], [/भ्/g, 'bh'], [/भ/g, 'bh'], [/ब/g, 'b'],
     [/म्/g, 'm'], [/म/g, 'm'],
@@ -635,7 +675,20 @@ export function cleanEnglishText(text?: string): string {
   str = str.replace(/\s*\([^)]*[\u0900-\u097F][^)]*\)/g, '');
   str = str.replace(/\s*\[[^\]]*[\u0900-\u097F][^\]]*\]/g, '');
 
-  // 2. If Latin characters or numbers exist, remove any remaining stray Devanagari characters, remove brackets, and clean up punctuation
+  // 2. If mixed text (contains both Devanagari and Latin):
+  // Convert any Devanagari parts into Latin so we don't drop letters like 'प' in 'पrathmik'!
+  if (/[\u0900-\u097F]/.test(str) && /[a-zA-Z]/.test(str)) {
+    // Handle 'पrathmik' or 'प्राथमिक' directly
+    str = str.replace(/पrathmik/gi, 'Primary');
+    for (const [dev, eng] of Object.entries(DEVANAGARI_TO_ENGLISH_MAP)) {
+      if (str.includes(dev)) {
+        str = str.replace(new RegExp(dev, 'g'), eng);
+      }
+    }
+    str = devanagariToLatin(str);
+  }
+
+  // If Latin characters or numbers exist, remove any remaining stray Devanagari characters, remove brackets, and clean up punctuation
   if (/[a-zA-Z]/.test(str)) {
     str = str.replace(/[\u0900-\u097F]/g, '');
     str = str.replace(/[()[\]{}]/g, '');
@@ -1103,7 +1156,36 @@ export function getLocalizedPreviousSchool(student: Student, lang: 'en' | 'mr' =
     return lang === 'mr' ? 'थेट प्रवेश / नवीन प्रवेश' : 'Direct Admission';
   }
   if (lang === 'en') {
-    return cleanEnglishText(student.previousSchool);
+    const raw = (student.previousSchool || '').trim();
+    const low = raw.toLowerCase();
+
+    if (DEVANAGARI_TO_ENGLISH_MAP[low]) return DEVANAGARI_TO_ENGLISH_MAP[low];
+    if (DEVANAGARI_TO_ENGLISH_MAP[raw]) return DEVANAGARI_TO_ENGLISH_MAP[raw];
+
+    if (raw === 'प्राथमिक शाळा' || raw === 'पrathmik Shala' || low === 'prathmik shala' || low === 'prathmik vidyalaya') {
+      return 'Primary School';
+    }
+    if (raw === 'कन्या शाळा' || raw === 'कन्या विद्यालय') return 'Girls High School';
+    if (raw === 'जि. प. शाळा' || raw === 'जि.प. शाळा') return 'Z. P. Primary School';
+
+    let trans = raw
+      .replace(/प्राथमिक शाळा/g, 'Primary School ')
+      .replace(/जि\.\s*प\.\s*शाळा/g, 'Z. P. School ')
+      .replace(/जि\.\s*प\./g, 'Z. P. ')
+      .replace(/महानगरपालिका शाळा/g, 'Municipal School ')
+      .replace(/मनपा शाळा/g, 'Municipal School ')
+      .replace(/कन्या शाळा/g, 'Girls School ')
+      .replace(/कन्या विद्यालय/g, 'Girls School ')
+      .replace(/हायस्कूल/g, 'High School ')
+      .replace(/महाविद्यालय/g, 'College ')
+      .replace(/विद्यामंदिर/g, 'Vidyamandir ')
+      .replace(/विद्यालय/g, 'Vidyalaya ')
+      .replace(/शाळा/g, 'School ')
+      .replace(/प्राथमिक/g, 'Primary ')
+      .replace(/पrathmik/gi, 'Primary')
+      .replace(/प/g, 'P');
+
+    return cleanEnglishText(trans);
   }
   if (student.previousSchoolLocal) return extractCleanLanguageName(student.previousSchoolLocal, lang);
 

@@ -27,6 +27,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatDate } from '../utils/dateUtils';
 import { exportStudentsToCSV, exportDocumentsRosterToCSV } from '../utils/exportUtils';
+import { useSchool } from '../context/SchoolContext';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { CLASS_OPTIONS } from '../components/students/StudentFilter';
 import { getStudentGender, getGenderLabel } from '../utils/genderUtils';
@@ -36,6 +37,7 @@ type ReportTab = 'gr-master' | 'class-strength' | 'year-wise' | 'leaving-roster'
 export function Reports() {
   const { t, language } = useLanguage();
   const { settings } = useSettings();
+  const { currentSchool } = useSchool();
   const navigate = useNavigate();
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -56,9 +58,10 @@ export function Reports() {
     async function loadData() {
       setLoading(true);
       try {
+        const activeId = currentSchool?.id;
         const [list, logs] = await Promise.all([
-          studentService.getAllStudents(),
-          documentService.getDocumentLogs().catch(() => [])
+          studentService.getAllStudents(activeId),
+          documentService.getDocumentLogs(activeId).catch(() => [])
         ]);
         setStudents(list);
         setDocumentLogs(logs);
@@ -69,7 +72,7 @@ export function Reports() {
       }
     }
     loadData();
-  }, []);
+  }, [currentSchool?.id]);
 
   const years = useMemo(() => {
     const set = new Set<string>();

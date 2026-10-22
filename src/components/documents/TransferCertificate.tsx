@@ -1,5 +1,6 @@
 import { Student } from '../../types';
 import { useSettings } from '../../context/SettingsContext';
+import { useSchool } from '../../context/SchoolContext';
 import { formatDate, dateToWords } from '../../utils/dateUtils';
 import { 
   getLocalizedStudentName, 
@@ -82,12 +83,42 @@ function parseStudentNameParts(student: Student, lang: 'en' | 'mr' = 'mr') {
   };
 }
 
-function parseBirthPlaceParts(placeStr?: string, lang: 'en' | 'mr' = 'mr') {
-  if (!placeStr) {
+function extractSchoolPlace(addressStr?: string, l: 'en' | 'mr' = 'mr'): string {
+  if (!addressStr) return l === 'mr' ? 'महाराष्ट्र' : 'Maharashtra';
+  const clean = addressStr.replace(/-\s*\d{6}/g, '').trim();
+  const parts = clean.split(/[,•|/]/).map(p => p.trim()).filter(Boolean);
+
+  let district = '';
+  let city = '';
+
+  for (const part of parts) {
+    if (/जि\.|जिल्हा|dist|district/i.test(part)) {
+      district = part.replace(/^(जि(ल्हा)?\.?|dist(rict)?\.?)\s*/i, '').trim();
+    } else if (!city && !/पेठ|lane|रस्ता|road|मार्ग|building|nagar|नगर|कॉलेज|chowk|चौक/i.test(part)) {
+      city = part;
+    }
+  }
+
+  if (district && city && district !== city) {
+    return l === 'mr' ? `${city} (जि. ${district})` : `${cleanEnglishText(city)} (Dist. ${cleanEnglishText(district)})`;
+  }
+  if (city) {
+    return l === 'mr' ? city : cleanEnglishText(city);
+  }
+  if (district) {
+    return l === 'mr' ? `जि. ${district}` : `Dist. ${cleanEnglishText(district)}`;
+  }
+  const lastPart = parts[parts.length - 1] || '';
+  return l === 'mr' ? lastPart : cleanEnglishText(lastPart);
+}
+
+function parseBirthPlaceParts(placeStr?: string, lang: 'en' | 'mr' = 'mr', fallbackCity?: string) {
+  if (!placeStr || placeStr.trim() === '-' || placeStr.trim() === '') {
+    const defaultVal = fallbackCity ? (lang === 'en' ? cleanEnglishText(fallbackCity) : fallbackCity) : '-';
     return {
-      village: lang === 'mr' ? 'चिखली' : 'Chikhli',
-      taluka: lang === 'mr' ? 'चिखली' : 'Chikhli',
-      district: lang === 'mr' ? 'बुलढाणा' : 'Buldhana',
+      village: defaultVal,
+      taluka: defaultVal,
+      district: defaultVal,
       state: lang === 'mr' ? 'महाराष्ट्र' : 'Maharashtra',
       country: lang === 'mr' ? 'भारत' : 'India'
     };
@@ -95,9 +126,9 @@ function parseBirthPlaceParts(placeStr?: string, lang: 'en' | 'mr' = 'mr') {
   const clean = placeStr.replace(/^(At Post|A\/P|At|Post|मु\.?\s*पो\.?)\s+/i, '');
   const parts = clean.split(/[,/•-]/).map(s => s.trim()).filter(Boolean);
 
-  let rawVillage = parts[0] || (lang === 'en' ? 'Chikhli' : 'चिखली');
-  let rawTaluka = lang === 'en' ? 'Chikhli' : 'चिखली';
-  let rawDistrict = lang === 'en' ? 'Buldhana' : 'बुलढाणा';
+  let rawVillage = parts[0] || fallbackCity || '-';
+  let rawTaluka = parts.length > 1 ? parts[1] : rawVillage;
+  let rawDistrict = parts.length > 2 ? parts[2] : rawTaluka;
   let rawState = lang === 'en' ? 'Maharashtra' : 'महाराष्ट्र';
   let rawCountry = lang === 'en' ? 'India' : 'भारत';
 
@@ -115,18 +146,18 @@ function parseBirthPlaceParts(placeStr?: string, lang: 'en' | 'mr' = 'mr') {
 
   if (lang === 'en') {
     return {
-      village: cleanEnglishText(rawVillage) || 'Chikhli',
-      taluka: cleanEnglishText(rawTaluka) || 'Chikhli',
-      district: cleanEnglishText(rawDistrict) || 'Buldhana',
+      village: cleanEnglishText(rawVillage) || '-',
+      taluka: cleanEnglishText(rawTaluka) || cleanEnglishText(rawVillage) || '-',
+      district: cleanEnglishText(rawDistrict) || cleanEnglishText(rawTaluka) || cleanEnglishText(rawVillage) || '-',
       state: cleanEnglishText(rawState) || 'Maharashtra',
       country: cleanEnglishText(rawCountry) || 'India'
     };
   }
 
   return {
-    village: extractCleanLanguageName(rawVillage, lang) || 'चिखली',
-    taluka: extractCleanLanguageName(rawTaluka, lang) || 'चिखली',
-    district: extractCleanLanguageName(rawDistrict, lang) || 'बुलढाणा',
+    village: extractCleanLanguageName(rawVillage, lang) || '-',
+    taluka: extractCleanLanguageName(rawTaluka, lang) || extractCleanLanguageName(rawVillage, lang) || '-',
+    district: extractCleanLanguageName(rawDistrict, lang) || extractCleanLanguageName(rawTaluka, lang) || extractCleanLanguageName(rawVillage, lang) || '-',
     state: 'महाराष्ट्र',
     country: 'भारत'
   };
@@ -163,24 +194,42 @@ export function TransferCertificate({
   originalTcDate = '',
   originalTcSerial = ''
 }: TransferCertificateProps) {
+  const { currentSchool } = useSchool();
   const { settings } = useSettings();
 
   const finalLeavingReason = leavingReason || student.leavingReason;
   const finalConduct = conduct || student.behaviour;
   const finalProgress = progress || student.academicProgress;
 
+  // Active School resolution: strictly isolate to currently selected school!
+  const effectiveSchool = currentSchool || { ...settings, id: settings.schoolId };
+
+  const schoolName = lang === 'en'
+    ? (effectiveSchool.schoolName && !/^[\u0900-\u097F]/.test(effectiveSchool.schoolName)
+        ? cleanEnglishText(effectiveSchool.schoolName)
+        : cleanEnglishText(settings.schoolName || 'School'))
+    : (effectiveSchool.schoolNameLocal || effectiveSchool.schoolName || settings.schoolNameLocal || settings.schoolName);
+
+  const sansthaName = getLocalizedSansthaName(effectiveSchool.boardAffiliation || settings.boardAffiliation, lang);
+  const formattedAddress = getLocalizedAddress(effectiveSchool.address || settings.address, lang);
+  const recognitionText = getLocalizedRecognitionNo(effectiveSchool.recognitionNo || settings.recognitionNo, lang);
+  const boardName = getLocalizedBoard(effectiveSchool.boardName || settings.boardName, lang);
+  const affiliationNo = effectiveSchool.affiliationNo || settings.affiliationNo || '-';
+  const udiseNumber = effectiveSchool.udiseNumber || settings.udiseNumber || '-';
+  const phone = effectiveSchool.phone || settings.phone || '';
+  const email = effectiveSchool.email || settings.email || '';
+  const headmasterName = effectiveSchool.headmasterName || settings.headmasterName || (lang === 'mr' ? 'मुख्याध्यापक' : 'Headmaster');
+  
+  // Extract place dynamically from school address (e.g. Kolhapur, Pune, Nagpur, Chikhli)
+  const placeName = extractSchoolPlace(effectiveSchool.address || settings.address, lang);
+
   const nameParts = parseStudentNameParts(student, lang);
-  const birthParts = parseBirthPlaceParts(lang === 'en' ? (student.birthPlace || student.birthPlaceLocal) : (student.birthPlaceLocal || student.birthPlace), lang);
+  const birthParts = parseBirthPlaceParts(
+    lang === 'en' ? (student.birthPlace || student.birthPlaceLocal) : (student.birthPlaceLocal || student.birthPlace),
+    lang,
+    placeName
+  );
   const stdWords = getStandardInWords(student.admissionClass, lang);
-
-  const placeName = lang === 'mr' 
-    ? 'चिखली (जि. बुलढाणा)' 
-    : 'Chikhli (Dist. Buldhana)';
-
-  const formattedAddress = getLocalizedAddress(settings.address, lang);
-  const boardName = getLocalizedBoard(settings.boardName, lang);
-  const recognitionText = getLocalizedRecognitionNo(settings.recognitionNo, lang);
-  const sansthaName = getLocalizedSansthaName(settings.boardAffiliation, lang);
 
   return (
     <div className="a4-document-page bg-white text-slate-900 mx-auto w-[794px] max-w-[210mm] min-h-[1123px] print:min-h-0 print:h-[285mm] print:max-h-[288mm] p-4 sm:p-5 print:p-2 border-2 border-slate-900 relative font-serif print:border-2 print:border-black print:m-0 print:shadow-none shadow-xl group flex flex-col justify-between box-border overflow-hidden">
@@ -188,8 +237,14 @@ export function TransferCertificate({
       {isDuplicate && (
         <div className="pointer-events-none select-none absolute inset-0 flex items-center justify-center overflow-hidden z-0 print:opacity-10 opacity-10">
           <div className="transform -rotate-25 text-rose-900 font-black uppercase tracking-widest border-8 border-rose-900 px-8 py-5 rounded-3xl text-center">
-            <span className="block text-4xl sm:text-5xl font-black">DUPLICATE COPY</span>
-            <span className="block text-3xl sm:text-4xl mt-1 font-bold">द्वितीय प्रत</span>
+            {lang === 'mr' ? (
+              <>
+                <span className="block text-4xl sm:text-5xl font-black">द्वितीय प्रत</span>
+                <span className="block text-2xl sm:text-3xl mt-1 font-bold tracking-wider">DUPLICATE COPY</span>
+              </>
+            ) : (
+              <span className="block text-4xl sm:text-5xl font-black">DUPLICATE COPY</span>
+            )}
           </div>
         </div>
       )}
@@ -208,13 +263,16 @@ export function TransferCertificate({
                 {sansthaName}
               </p>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950 uppercase leading-tight font-serif">
-                {lang === 'en' ? settings.schoolName : (settings.schoolNameLocal || settings.schoolName)}
+                {schoolName}
               </h1>
             </div>
           </div>
 
           <p className="text-xs text-slate-700 font-sans mt-0.5 font-medium">
-            {formattedAddress} • {lang === 'mr' ? 'दूरध्वनी:' : 'Ph:'} <strong className="font-mono text-slate-900 font-bold">{settings.phone || '(07264)-242113'}</strong> • {lang === 'mr' ? 'ई-मेल:' : 'Email:'} {settings.email}
+            {formattedAddress}
+            {phone ? ` • ${lang === 'mr' ? 'दूरध्वनी:' : 'Ph:'} ` : ''}
+            {phone ? <strong className="font-mono text-slate-900 font-bold">{phone}</strong> : null}
+            {email ? ` • ${lang === 'mr' ? 'ई-मेल:' : 'Email:'} ${email}` : ''}
           </p>
 
           {/* School Recognition Number Bar */}
@@ -231,15 +289,15 @@ export function TransferCertificate({
             </div>
             <div>
               <span className="text-slate-600 font-normal">{lang === 'mr' ? 'संलग्नता क्र.: ' : 'Affiliation No.: '}</span>
-              <strong className="font-mono">{settings.affiliationNo || '04.03.016'}</strong>
+              <strong className="font-mono">{affiliationNo}</strong>
             </div>
             <div>
               <span className="text-slate-600 font-normal">{lang === 'mr' ? 'यु-डायस क्र.: ' : 'U-DISE No.: '}</span>
-              <strong className="font-mono text-slate-950">{settings.udiseNumber || '27040200119'}</strong>
+              <strong className="font-mono text-slate-950">{udiseNumber}</strong>
             </div>
             <div className="text-right">
               <span className="text-slate-600 font-normal">{lang === 'mr' ? 'माध्यम: ' : 'Medium: '}</span>
-              <strong>{lang === 'mr' ? 'मराठी / सेमी इंग्रजी' : 'Marathi / Semi'}</strong>
+              <strong>{lang === 'mr' ? 'मराठी / सेमी इंग्रजी' : 'Marathi / Semi-English'}</strong>
             </div>
           </div>
 
@@ -249,7 +307,7 @@ export function TransferCertificate({
               <div className="mb-1 inline-flex items-center gap-1.5 px-3.5 py-0.5 bg-rose-50 border-2 border-rose-700 rounded-sm shadow-xs font-sans">
                 <span className="w-2 h-2 rounded-full bg-rose-600 inline-block animate-pulse"></span>
                 <span className="text-xs sm:text-sm font-black text-rose-800 tracking-wider uppercase">
-                  {lang === 'mr' ? '★ द्वितीय प्रत (DUPLICATE COPY) ★' : '★ DUPLICATE COPY (द्वितीय प्रत) ★'}
+                  {lang === 'mr' ? '★ द्वितीय प्रत (DUPLICATE COPY) ★' : '★ DUPLICATE COPY ★'}
                 </span>
               </div>
             )}
@@ -579,7 +637,7 @@ export function TransferCertificate({
                 <span className="border-b border-dotted border-slate-600 w-32 sm:w-36 inline-block"></span>
               </div>
               <p className="mt-1 text-slate-950">{lang === 'mr' ? 'मुख्याध्यापक' : 'Headmaster'}</p>
-              <p className="text-[10px] font-normal text-slate-600 leading-none mt-0.5">{settings.headmasterName}</p>
+              <p className="text-[10px] font-normal text-slate-600 leading-none mt-0.5">{headmasterName}</p>
             </div>
           </div>
 

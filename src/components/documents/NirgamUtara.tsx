@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Student } from '../../types';
 import { useSettings } from '../../context/SettingsContext';
+import { useSchool } from '../../context/SchoolContext';
 import { formatDate, dateToWords } from '../../utils/dateUtils';
 import { 
   getLocalizedStudentName, 
@@ -110,46 +111,63 @@ export function NirgamUtara({
   lang: initialLang = 'mr',
   onEdit
 }: NirgamUtaraProps) {
+  const { currentSchool } = useSchool();
   const { settings } = useSettings();
   const [currentLang, setCurrentLang] = useState<'en' | 'mr'>(initialLang);
+
+  const effectiveSchool = currentSchool || { ...settings, id: settings.schoolId };
 
   // Sync when prop changes
   useEffect(() => {
     setCurrentLang(initialLang);
   }, [initialLang]);
 
-  // Parse Taluka and District intelligently based on current language
+  // Parse Taluka and District intelligently based on active school address and language
   const parseAddressDetails = (l: 'en' | 'mr') => {
-    const rawAddr = settings.address || '';
+    const rawAddr = effectiveSchool.address || settings.address || '';
+    const cleanAddr = rawAddr.replace(/-\s*\d{6}/g, '').trim();
+    const parts = cleanAddr.split(/[,•|/]/).map(p => p.trim()).filter(Boolean);
+
+    let district = '';
+    let taluka = '';
+    let place = '';
+
+    for (const part of parts) {
+      if (/जि\.|जिल्हा|dist|district/i.test(part)) {
+        district = part.replace(/^(जि(ल्हा)?\.?|dist(rict)?\.?)\s*/i, '').trim();
+      } else if (/ता\.|तालुका|tal|taluka/i.test(part)) {
+        taluka = part.replace(/^(ता(लुका)?\.?|tal(uka)?\.?)\s*/i, '').trim();
+      }
+    }
+
+    if (!district && parts.length > 1) {
+      district = parts[parts.length - 1];
+    } else if (!district && parts.length === 1) {
+      district = parts[0];
+    }
+
+    if (!taluka && parts.length > 1) {
+      taluka = parts[0];
+    } else if (!taluka) {
+      taluka = district || (l === 'mr' ? 'कोल्हापूर' : 'Kolhapur');
+    }
+
+    place = l === 'en' 
+      ? `At Post ${cleanEnglishText(taluka)}` 
+      : `मु. पो. ${taluka}`;
+
     if (l === 'en') {
-      let taluka = 'Chikhli';
-      let district = 'Buldhana';
-      let place = 'At Post Chikhli';
-      if (rawAddr.includes(',')) {
-        const parts = rawAddr.split(',');
-        const part0 = parts[0]?.trim() || '';
-        taluka = cleanEnglishText(part0.replace(/At\s+Post|A\/P/gi, '').trim() || 'Chikhli');
-        place = cleanEnglishText(part0 || 'At Post Chikhli');
-        const distMatch = rawAddr.match(/Dist\.?\s*([A-Za-z]+)/i);
-        if (distMatch) district = cleanEnglishText(distMatch[1]);
-      }
-      return { taluka, district, place };
+      return { 
+        taluka: cleanEnglishText(taluka) || 'Kolhapur', 
+        district: cleanEnglishText(district) || 'Kolhapur', 
+        place: cleanEnglishText(place) || 'At Post Kolhapur' 
+      };
     } else {
-      let taluka = 'चिखली';
-      let district = 'बुलढाणा';
-      let place = 'मु. पो. चिखली';
-      if (rawAddr.includes(',')) {
-        const parts = rawAddr.split(',');
-        const part0 = parts[0]?.trim() || '';
-        place = cleanAndLocalizePlace(part0 || 'मु. पो. चिखली', l);
-        taluka = cleanAndLocalizeTaluka(part0 || 'चिखली', l);
-        const distMatch = rawAddr.match(/जि\.?\s*([^\s,-]+)|Dist\.?\s*([A-Za-z]+)/i);
-        if (distMatch) {
-          const distRaw = distMatch[1] || distMatch[2];
-          district = cleanAndLocalizePlace(distRaw, l).replace(/^(जि\.?|जिला)\s*/, '').trim() || 'बुलढाणा';
-        }
-      }
-      return { taluka, district, place };
+      return { 
+        taluka: taluka || 'कोल्हापूर', 
+        district: district || 'कोल्हापूर', 
+        place: place || 'मु. पो. कोल्हापूर' 
+      };
     }
   };
 
@@ -162,7 +180,7 @@ export function NirgamUtara({
       return {
         taluka: loc.taluka,
         district: loc.district,
-        place: loc.place || 'At Post Chikhli',
+        place: loc.place || `At Post ${loc.taluka || loc.district || 'School'}`,
         occupation: 'Agriculture',
         currentClass: classStr,
         leavingClass: classStr,
@@ -174,7 +192,7 @@ export function NirgamUtara({
       return {
         taluka: loc.taluka,
         district: loc.district,
-        place: loc.place || 'मु. पो. चिखली',
+        place: loc.place || `मु. पो. ${loc.taluka || loc.district || 'शाळा'}`,
         occupation: 'शेती',
         currentClass: classStr,
         leavingClass: classStr,
@@ -215,7 +233,7 @@ export function NirgamUtara({
           // If Marathi mode, strictly cleanse any English leaks from saved data
           const cleanPlace = cleanAndLocalizePlace(data.place || defaults.place, currentLang);
           const cleanTaluka = cleanAndLocalizeTaluka(data.taluka || defaults.taluka, currentLang);
-          const cleanDistrict = cleanAndLocalizePlace(data.district || defaults.district, currentLang).replace(/^(जि\.?|जिला)\s*/, '').trim() || 'बुलढाणा';
+          const cleanDistrict = cleanAndLocalizePlace(data.district || defaults.district, currentLang).replace(/^(जि\.?|जिला)\s*/, '').trim() || defaults.district;
 
           const hasEnglishLeak = 
             /[a-zA-Z]/.test(data.identificationMarks || '') || 
@@ -368,8 +386,8 @@ export function NirgamUtara({
 
   // Clean School Name
   const displaySchoolName = currentLang === 'en' 
-    ? cleanEnglishText(settings.schoolName)
-    : (settings.schoolNameLocal || settings.schoolName);
+    ? cleanEnglishText(effectiveSchool.schoolName || settings.schoolName)
+    : (effectiveSchool.schoolNameLocal || effectiveSchool.schoolName || settings.schoolNameLocal || settings.schoolName);
 
   // Student Full Name - 100% pure Marathi in mr, 100% pure English in en
   const getStudentDisplayName = () => {
@@ -391,10 +409,7 @@ export function NirgamUtara({
 
   // Previous School
   const getPreviousSchoolDisplayName = () => {
-    if (currentLang === 'en') {
-      return cleanEnglishText(student.previousSchool) || 'Direct Admission / Fresh';
-    }
-    return getLocalizedPreviousSchool(student, currentLang);
+    return getLocalizedPreviousSchool(student, currentLang) || (currentLang === 'en' ? 'Direct Admission / Fresh' : 'थेट प्रवेश / नवीन प्रवेश');
   };
 
   // Birth Place

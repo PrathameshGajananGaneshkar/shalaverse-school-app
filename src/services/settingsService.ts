@@ -29,6 +29,19 @@ const SETTINGS_DOC_ID = 'general_school_config';
 
 export const settingsService = {
   async getSettings(): Promise<SchoolSettings> {
+    // 1. Check active school settings in localStorage first
+    const local = typeof window !== 'undefined' ? localStorage.getItem('shalaverse_school_settings') : null;
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (parsed && (parsed.schoolName || parsed.schoolNameLocal)) {
+          return { ...DEFAULT_SCHOOL_SETTINGS, ...parsed };
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     let settings = DEFAULT_SCHOOL_SETTINGS;
     try {
       const docRef = doc(db, 'settings', SETTINGS_DOC_ID);
@@ -40,38 +53,6 @@ export const settingsService = {
       }
     } catch (err) {
       console.warn('Could not fetch settings from Firestore, checking localStorage:', err);
-    }
-    
-    // Fallback to localStorage or default
-    const local = localStorage.getItem('shalaverse_school_settings');
-    if (local) {
-      try {
-        settings = { ...settings, ...JSON.parse(local) };
-      } catch {
-        // ignore
-      }
-    }
-
-    if (!settings.schoolNameLocal || !settings.schoolNameLocal.trim()) {
-      settings.schoolNameLocal = 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली';
-    }
-    if (!settings.schoolName || !settings.schoolName.trim()) {
-      settings.schoolName = 'Shri Shivaji High School and Junior College, Chikhli';
-    }
-    if (!settings.boardAffiliation || settings.boardAffiliation.includes('MH-BD-0402') || settings.boardAffiliation.includes('SSC / HSC Maharashtra State Board')) {
-      settings.boardAffiliation = 'Shri Shivaji Shikshan Sanstha, Amravati – Managed by';
-    }
-    if (!settings.phone || settings.phone.includes('+91 7264 242119')) {
-      settings.phone = '(07264)-242113';
-    }
-    if (!settings.recognitionNo) {
-      settings.recognitionNo = 'Kr. Va Di. Bu. Ji. Pa. / Secondary School / Inspection 11150 Education Department Buldhana, Dt. 18/10/65';
-    }
-    if (!settings.affiliationNo) {
-      settings.affiliationNo = '04.03.016';
-    }
-    if (!settings.boardName) {
-      settings.boardName = 'Amravati';
     }
 
     return settings;

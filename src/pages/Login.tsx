@@ -4,32 +4,35 @@ import {
   School, 
   Lock, 
   Mail, 
-  ShieldCheck, 
   LogIn,
   AlertCircle,
   KeyRound,
   CheckCircle2,
-  HelpCircle,
   X,
   Eye,
   EyeOff,
-  Sparkles
+  Sparkles,
+  Globe,
+  Crown,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useSettings } from '../context/SettingsContext';
 
 export function Login() {
-  const { login, resetPassword, getCredentials, isAuthenticated } = useAuth();
-  const { language } = useLanguage();
-  const { settings } = useSettings();
+  const { login, resetPassword, isAuthenticated, userProfile } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      if (userProfile?.role === 'super_admin') {
+        navigate('/super-admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, userProfile, navigate]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,39 +52,24 @@ export function Login() {
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Pre-populate with registered master email if available for easy access
-    getCredentials().then(creds => {
-      if (creds && creds.adminEmail) {
-        const targetEmail = creds.adminEmail === 'p.ganeshkar8788@gmail.com' 
-          ? 'shivajischool.chikhli@gmail.com' 
-          : creds.adminEmail;
-        setEmail(targetEmail);
-        setForgotEmail(targetEmail);
-      } else {
-        setEmail('shivajischool.chikhli@gmail.com');
-        setForgotEmail('shivajischool.chikhli@gmail.com');
-      }
-    }).catch(() => {
-      setEmail('shivajischool.chikhli@gmail.com');
-      setForgotEmail('shivajischool.chikhli@gmail.com');
-    });
-  }, [getCredentials]);
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setError(language === 'mr' ? 'कृपया शाळा ईमेल आणि पासवर्ड प्रविष्ट करा.' : 'Please enter school email ID and password.');
+      setError(language === 'mr' ? 'कृपया ईमेल / युडायस आणि पासवर्ड प्रविष्ट करा.' : 'Please enter Email / UDISE and password.');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await login(email, password);
-      navigate('/dashboard');
+      const profile = await login(email.trim(), password.trim());
+      if (profile?.role === 'super_admin') {
+        navigate('/super-admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err?.message || (language === 'mr' ? 'चुकीचा ईमेल किंवा पासवर्ड! कृपया योग्य माहिती प्रविष्ट करा.' : 'Authentication failed. Please check your credentials.'));
+      setError(err?.message || (language === 'mr' ? 'चुकीचा ईमेल/युडायस किंवा पासवर्ड! कृपया योग्य माहिती प्रविष्ट करा.' : 'Authentication failed. Please check your credentials.'));
     } finally {
       setLoading(false);
     }
@@ -92,37 +80,61 @@ export function Login() {
     setForgotError(null);
     setForgotSuccess(null);
 
-    if (!forgotEmail.trim()) {
-      setForgotError(language === 'mr' ? 'कृपया नोंदणीकृत ईमेल प्रविष्ट करा.' : 'Please enter registered email.');
+    const cleanForgotId = forgotEmail.trim();
+    const cleanNewPass = newPassword.trim();
+
+    if (!cleanForgotId) {
+      setForgotError(language === 'mr' ? 'कृपया नोंदणीकृत ईमेल किंवा युडायस नंबर प्रविष्ट करा.' : 'Please enter registered email or UDISE number.');
       return;
     }
 
-    if (!newPassword || newPassword.trim().length < 4) {
+    if (!cleanNewPass || cleanNewPass.length < 4) {
       setForgotError(language === 'mr' ? 'नवीन पासवर्ड किमान ४ अक्षरांचा असावा.' : 'New password must be at least 4 characters long.');
       return;
     }
 
-    if (newPassword !== confirmPassword) {
+    if (cleanNewPass !== confirmPassword.trim()) {
       setForgotError(language === 'mr' ? 'नवीन पासवर्ड आणि कन्फर्म पासवर्ड जुळत नाहीत.' : 'Passwords do not match.');
       return;
     }
 
     setForgotLoading(true);
     try {
-      const res = await resetPassword(forgotEmail, newPassword, forgotPin);
+      const res = await resetPassword(cleanForgotId, cleanNewPass, forgotPin.trim());
       if (res.success) {
-        setForgotSuccess(language === 'mr' ? 'पासवर्ड यशस्वीरित्या बदलला आहे! आता नवीन पासवर्ड वापरून लॉगिन करा.' : 'Password reset successfully! You can now log in.');
-        setPassword(newPassword);
-        setSuccessMsg(language === 'mr' ? 'नवीन पासवर्ड सेट झाला आहे. कृपया लॉगिन करा.' : 'New password is set. Please log in.');
-        setTimeout(() => {
-          setShowForgotModal(false);
-          setForgotSuccess(null);
-        }, 1500);
+        // Immediately update login form fields with the verified credentials
+        setEmail(cleanForgotId);
+        setPassword(cleanNewPass);
+        setError(null);
+        setSuccessMsg(language === 'mr' ? 'नवीन पासवर्ड त्वरित अपडेट झाला आहे!' : 'Password updated immediately!');
+        setForgotSuccess(language === 'mr' ? 'पासवर्ड यशस्वीरित्या बदलला आहे! त्वरित लॉगिन होत आहे...' : 'Password updated! Logging you in...');
+
+        // Attempt instant auto-login with newly set password
+        try {
+          const profile = await login(cleanForgotId, cleanNewPass);
+          setTimeout(() => {
+            setShowForgotModal(false);
+            setForgotSuccess(null);
+            if (profile?.role === 'super_admin') {
+              navigate('/super-admin', { replace: true });
+            } else {
+              navigate('/dashboard', { replace: true });
+            }
+          }, 400);
+          return;
+        } catch {
+          // If auto login needs user click, keep fields populated and close modal smoothly
+          setForgotSuccess(language === 'mr' ? 'पासवर्ड त्वरित अपडेट झाला आहे! आपण आता नवीन पासवर्डने लॉगिन करू शकता.' : 'Password updated immediately! You can now log in.');
+          setTimeout(() => {
+            setShowForgotModal(false);
+            setForgotSuccess(null);
+          }, 1200);
+        }
       } else {
         setForgotError(res.message);
       }
     } catch (err: any) {
-      setForgotError(err?.message || 'Password reset failed.');
+      setForgotError(err?.message || (language === 'mr' ? 'पासवर्ड रीसेट करताना त्रुटी आली.' : 'Password reset failed.'));
     } finally {
       setForgotLoading(false);
     }
@@ -133,33 +145,83 @@ export function Login() {
       {/* Background Grid Pattern */}
       <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
+      {/* Top Language Switcher Bar */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-lg backdrop-blur-md">
+        <Globe className="w-4 h-4 text-slate-400 ml-2" />
+        <button
+          type="button"
+          onClick={() => setLanguage('mr')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            language === 'mr'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          मराठी
+        </button>
+        <button
+          type="button"
+          onClick={() => setLanguage('en')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            language === 'en'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          English
+        </button>
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         {/* Brand Heading */}
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/30 mb-3 border border-blue-400/40">
+          <div className="mx-auto w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-700 to-blue-500 flex items-center justify-center text-white shadow-xl shadow-blue-600/30 mb-3.5 border border-blue-400/40">
             <School className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-wider">
             SHALAVERSE
           </h1>
-          <p className="text-xs sm:text-sm text-blue-300 font-medium mt-0.5">
+          <p className="text-xs sm:text-sm text-blue-300 font-medium mt-1 max-w-sm mx-auto leading-relaxed">
             {language === 'mr' 
               ? 'शाळा प्रवेश व जनरल रजिस्टर व्यवस्थापन प्रणाली' 
               : 'School Admission & General Register Management System'}
-          </p>
-          <p className="text-xs text-slate-400 mt-1 font-semibold">
-            {language === 'mr' ? (settings.schoolNameLocal || settings.schoolName) : settings.schoolName} ({language === 'mr' ? 'युडायस' : 'UDISE'}: {settings.udiseNumber})
           </p>
         </div>
 
         {/* Main Login Card */}
         <div className="mt-6 bg-slate-900/95 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl backdrop-blur-md space-y-5">
           
+          <div className="border-b border-slate-800 pb-3">
+            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+              <LogIn className="w-5 h-5 text-blue-400" />
+              <span>{language === 'mr' ? 'लॉगिन करा' : 'Sign In to Your Account'}</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              {language === 'mr'
+                ? 'शाळेचा ईमेल किंवा युडायस नंबर वापरून लॉगिन करा'
+                : 'Enter your registered school email or UDISE number to continue'}
+            </p>
+          </div>
+
           {/* Notification Messages */}
           {error && (
-            <div className="p-3.5 bg-red-950/70 border border-red-500/60 rounded-xl text-xs text-red-200 font-medium flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>{error}</span>
+            <div className="p-3.5 bg-red-950/80 border border-red-500/60 rounded-xl text-xs text-red-200 font-medium space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{error}</span>
+              </div>
+              <div className="flex items-center justify-end pt-1 border-t border-red-500/30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForgotEmail(email);
+                    setShowForgotModal(true);
+                  }}
+                  className="text-amber-300 hover:text-amber-200 font-semibold underline text-xs cursor-pointer"
+                >
+                  {language === 'mr' ? 'पासवर्ड रीसेट करा' : 'Reset Password'}
+                </button>
+              </div>
             </div>
           )}
 
@@ -170,21 +232,30 @@ export function Login() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Field */}
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off" autoCorrect="off" autoCapitalize="none">
+            {/* Email / UDISE Field */}
             <div>
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                {language === 'mr' ? 'नोंदणीकृत शाळा ईमेल (Login Email)' : 'School Login Email ID'} <span className="text-red-400">*</span>
+                {language === 'mr' ? 'नोंदणीकृत ईमेल किंवा युडायस (UDISE) नंबर' : 'Registered Email or UDISE Number'} <span className="text-red-400">*</span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
-                  id="input-login-email"
-                  type="email"
+                  id="input-login-identifier"
+                  name="school_portal_identifier_code"
+                  type="text"
                   required
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  aria-autocomplete="none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="shivajischool.chikhli@gmail.com"
+                  placeholder={language === 'mr' ? 'उदा. 27070200119 किंवा example@gmail.com' : 'e.g. 27070200119 or example@gmail.com'}
                   className="w-full pl-10 pr-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition outline-hidden"
                 />
               </div>
@@ -194,30 +265,35 @@ export function Login() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  {language === 'mr' ? 'पासवर्ड (Password)' : 'Password'} <span className="text-red-400">*</span>
+                  {language === 'mr' ? 'पासवर्ड' : 'Password'} <span className="text-red-400">*</span>
                 </label>
                 <button
                   type="button"
                   id="btn-open-forgot-modal"
                   onClick={() => {
-                    setForgotEmail(email || 'shivajischool.chikhli@gmail.com');
+                    setForgotEmail(email);
                     setShowForgotModal(true);
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  <KeyRound className="w-3 h-3" />
+                  <KeyRound className="w-3.5 h-3.5" />
                   <span>{language === 'mr' ? 'पासवर्ड विसरलात?' : 'Forgot Password?'}</span>
                 </button>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
-                  id="input-login-password"
+                  id="input-login-pass"
+                  name="school_portal_security_pass"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
+                  placeholder={language === 'mr' ? 'तुमचा पासवर्ड टाका' : 'Enter your password'}
                   className="w-full pl-10 pr-10 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition outline-hidden"
                 />
                 <button
@@ -240,50 +316,18 @@ export function Login() {
               <LogIn className="w-4 h-4" />
               <span>
                 {loading 
-                  ? (language === 'mr' ? 'तपासत आहे...' : 'Verifying...') 
-                  : (language === 'mr' ? 'वेबसाईट उघडा (Login Portal)' : 'Login to School Portal')}
+                  ? (language === 'mr' ? 'तपासत आहे...' : 'Signing in...') 
+                  : (language === 'mr' ? 'लॉगिन करा' : 'Sign In')}
               </span>
             </button>
           </form>
-
-          {/* Quick Access Info / Security Guarantee */}
-          <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <div className="flex items-center gap-1.5 text-blue-300 font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
-              <span>{language === 'mr' ? 'सुरक्षित प्रमाणीकरण (Strict Auth Guard)' : 'Strict Auth Protected'}</span>
-            </div>
-            <p className="text-slate-400">
-              {language === 'mr' 
-                ? 'योग्य ईमेल आणि पासवर्ड टाकल्याशिवाय कोणतीही फाईल किंवा विद्यार्थी डेटा उघडता येणार नाही.' 
-                : 'Unauthorized access is strictly blocked. Valid login credentials are required.'}
-            </p>
-          </div>
-
-          {/* Security & Official Badge */}
-          <div className="pt-1 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-            <span className="flex items-center gap-1 text-emerald-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Live Protected
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setForgotEmail(email || 'shivajischool.chikhli@gmail.com');
-                setShowForgotModal(true);
-              }}
-              className="text-slate-400 hover:text-slate-200 underline text-[11px]"
-            >
-              {language === 'mr' ? 'नवीन पासवर्ड कसा सेट करावा?' : 'Reset Password Help'}
-            </button>
-          </div>
-
         </div>
       </div>
 
       {/* FORGOT PASSWORD MODAL */}
       {showForgotModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative space-y-5">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 sm:p-7 shadow-2xl relative space-y-5 animate-in fade-in-50">
             
             <button
               type="button"
@@ -299,10 +343,10 @@ export function Login() {
               </div>
               <div>
                 <h3 className="text-base font-bold text-white">
-                  {language === 'mr' ? 'पासवर्ड रीसेट करा (Forgot Password)' : 'Reset Your Password'}
+                  {language === 'mr' ? 'पासवर्ड रीसेट करा' : 'Reset Password'}
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {language === 'mr' ? 'नवीन पासवर्ड सेट करण्यासाठी खालील माहिती भरा' : 'Set a new password for school login'}
+                  {language === 'mr' ? 'नवीन पासवर्ड सेट करण्यासाठी खालील माहिती भरा' : 'Enter your registered details to set a new password'}
                 </p>
               </div>
             </div>
@@ -321,19 +365,27 @@ export function Login() {
               </div>
             )}
 
-            <form onSubmit={handleForgotPasswordSubmit} className="space-y-3.5">
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-3.5" autoComplete="off">
               <div>
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
-                  {language === 'mr' ? 'नोंदणीकृत ईमेल आयडी' : 'Registered Email ID'} <span className="text-red-400">*</span>
+                  {language === 'mr' ? 'नोंदणीकृत ईमेल किंवा युडायस (UDISE) नंबर' : 'Registered Email or UDISE Number'} <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
-                    type="email"
+                    id="input-forgot-identifier"
+                    name="school_recovery_identifier_key"
+                    type="text"
                     required
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="shivajischool.chikhli@gmail.com"
+                    placeholder={language === 'mr' ? 'उदा. 27070200119 किंवा example@gmail.com' : 'e.g. 27070200119 or example@gmail.com'}
                     className="w-full pl-10 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:border-orange-500 outline-hidden"
                   />
                 </div>
@@ -344,15 +396,14 @@ export function Login() {
                   <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
                     {language === 'mr' ? 'सुरक्षा पिन (Security Recovery PIN)' : 'Security Recovery PIN'}
                   </label>
-                  <span className="text-[10px] text-slate-400">Default PIN: 8788</span>
                 </div>
                 <div className="relative">
-                  <ShieldCheck className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type="text"
                     value={forgotPin}
                     onChange={(e) => setForgotPin(e.target.value)}
-                    placeholder="उदा. 8788"
+                    placeholder={language === 'mr' ? 'उदा. 8788' : 'e.g. 8788'}
                     className="w-full pl-10 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:border-orange-500 outline-hidden"
                   />
                 </div>
@@ -369,7 +420,7 @@ export function Login() {
                     required
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="नवीन पासवर्ड टाका (उदा. Shala@2026)"
+                    placeholder={language === 'mr' ? 'नवीन पासवर्ड टाका (किमान ४ अक्षरे)' : 'Enter new password (min. 4 chars)'}
                     className="w-full pl-10 pr-10 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:border-orange-500 outline-hidden"
                   />
                   <button
@@ -393,7 +444,7 @@ export function Login() {
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="तोच नवीन पासवर्ड पुन्हा टाका"
+                    placeholder={language === 'mr' ? 'तोच नवीन पासवर्ड पुन्हा टाका' : 'Re-enter new password'}
                     className="w-full pl-10 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs sm:text-sm text-white focus:border-orange-500 outline-hidden"
                   />
                 </div>
@@ -413,22 +464,14 @@ export function Login() {
                   className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-xs font-bold shadow-md shadow-orange-600/20 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>{forgotLoading ? (language === 'mr' ? 'बदलत आहे...' : 'Saving...') : (language === 'mr' ? 'नवीन पासवर्ड जतन करा' : 'Save New Password')}</span>
+                  <span>
+                    {forgotLoading 
+                      ? (language === 'mr' ? 'बदलत आहे...' : 'Saving...') 
+                      : (language === 'mr' ? 'नवीन पासवर्ड जतन करा' : 'Save New Password')}
+                  </span>
                 </button>
               </div>
             </form>
-
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-400">
-              <div className="flex items-center gap-1.5 text-orange-400 font-semibold mb-1">
-                <HelpCircle className="w-3.5 h-3.5" />
-                <span>{language === 'mr' ? 'मदत व सूचना' : 'Help Note'}</span>
-              </div>
-              <p>
-                {language === 'mr' 
-                  ? 'तुम्ही तुमचा पासवर्ड कधीही विसरल्यास येथे नवीन पासवर्ड सेट करू शकता. तो त्वरित सेव्ह होतो व पुढील सर्व वेळेस लागू होतो.' 
-                  : 'You can reset your login password at any time. The new password will take effect immediately.'}
-              </p>
-            </div>
 
           </div>
         </div>
@@ -437,4 +480,3 @@ export function Login() {
     </div>
   );
 }
-

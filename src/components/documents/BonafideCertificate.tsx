@@ -1,5 +1,6 @@
 import { Student } from '../../types';
 import { useSettings } from '../../context/SettingsContext';
+import { useSchool } from '../../context/SchoolContext';
 import { formatDate, dateToWords } from '../../utils/dateUtils';
 import { 
   getLocalizedCaste, 
@@ -83,6 +84,7 @@ export function BonafideCertificate({
   lang = 'mr',
   onEdit
 }: BonafideCertificateProps) {
+  const { currentSchool } = useSchool();
   const { settings } = useSettings();
 
   const currentLang = lang;
@@ -95,12 +97,36 @@ export function BonafideCertificate({
 
   const finalPurpose = purpose || defaultPurpose;
 
+  const effectiveSchool = currentSchool || { ...settings, id: settings.schoolId };
+
+  const schoolNameEn = cleanEnglishText(effectiveSchool.schoolName || settings.schoolName || 'School');
+  const schoolNameMr = effectiveSchool.schoolNameLocal || effectiveSchool.schoolName || settings.schoolNameLocal || settings.schoolName || 'शाळा';
+  const addressEn = cleanEnglishText(effectiveSchool.address || settings.address || '');
+  const addressMr = effectiveSchool.address || settings.address || '';
+
+  // Extract school city/place dynamically from address
+  const getBonafidePlace = (addr?: string, l: 'en' | 'mr' = 'mr') => {
+    if (!addr) return l === 'mr' ? 'महाराष्ट्र' : 'Maharashtra';
+    const clean = addr.replace(/-\s*\d{6}/g, '').trim();
+    const parts = clean.split(/[,•|/]/).map(p => p.trim()).filter(Boolean);
+    for (const part of parts) {
+      if (/जि\.|जिल्हा|dist|district/i.test(part)) {
+        const d = part.replace(/^(जि(ल्हा)?\.?|dist(rict)?\.?)\s*/i, '').trim();
+        return l === 'mr' ? d : cleanEnglishText(d);
+      }
+    }
+    const last = parts[parts.length - 1] || '';
+    return l === 'mr' ? last : cleanEnglishText(last);
+  };
+
+  const dynamicPlace = getBonafidePlace(effectiveSchool.address || settings.address, currentLang);
+
   // Language Dictionary for the exact same Bonafide Proforma
   const texts: Record<'en' | 'mr', any> = {
     en: {
       topHeader: 'BONAFIDE CERTIFICATE',
-      schoolName: (settings.schoolName || 'SHRI SHIVAJI HIGH SCHOOL AND JUNIOR COLLEGE,').toUpperCase(),
-      address: (settings.address || 'CHIKHLI, DIST. BULDHANA - 443201').toUpperCase(),
+      schoolName: schoolNameEn.toUpperCase(),
+      address: addressEn.toUpperCase(),
       udisePrefix: 'UDISE NO.',
       centerTitle: 'BONAFIDE CERTIFICATE',
       certifyPrefix: 'This is to certify that',
@@ -117,18 +143,18 @@ export function BonafideCertificate({
       dobWordsPrefix: '(in words)',
       grNoPrefix: 'Gen. Reg. No.',
       placeLabel: 'Place:',
-      defaultPlace: 'Chikhli',
+      defaultPlace: dynamicPlace,
       dateLabel: 'Date:',
       refLabel: 'Ref / Outward No:',
       classTeacher: 'Class Teacher',
       principal: 'Principal',
-      footerSchool: settings.schoolName || 'Shri Shivaji High School & Jr. College',
-      footerAddress: 'Chikhli, Dist. Buldhana - 443201'
+      footerSchool: schoolNameEn,
+      footerAddress: addressEn
     },
     mr: {
       topHeader: 'बोनाफाईड प्रमाणपत्र',
-      schoolName: (settings.schoolNameLocal || 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली'),
-      address: 'चिखली, जि. बुलढाणा - ४४३२०१',
+      schoolName: schoolNameMr,
+      address: addressMr,
       udisePrefix: 'यु-डायस क्र.',
       centerTitle: 'बोनाफाईड प्रमाणपत्र',
       certifyPrefix: 'प्रमाणित करण्यात येते की,',
@@ -145,13 +171,13 @@ export function BonafideCertificate({
       dobWordsPrefix: '(अक्षरी)',
       grNoPrefix: 'जनरल रजिस्टर नं. (Gen. Reg. No.)',
       placeLabel: 'ठिकाण:',
-      defaultPlace: 'चिखली',
+      defaultPlace: dynamicPlace,
       dateLabel: 'दिनांक:',
       refLabel: 'जावक क्र.:',
       classTeacher: 'वर्ग शिक्षक',
       principal: 'मुख्याध्यापक / प्राचार्य',
-      footerSchool: settings.schoolNameLocal || 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली',
-      footerAddress: 'चिखली, जि. बुलढाणा - ४४३२०१'
+      footerSchool: schoolNameMr,
+      footerAddress: addressMr
     }
   };
 

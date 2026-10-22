@@ -6,23 +6,30 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   setPersistence,
-  browserSessionPersistence
+  browserSessionPersistence,
+  updatePassword,
+  updateProfile
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { UserProfile } from '../types';
-import { authCredentialsService, AuthCredentials } from '../services/authCredentialsService';
+import { authCredentialsService, AuthCredentials, SuperAdminCredentials } from '../services/authCredentialsService';
+import { schoolService } from '../services/schoolService';
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
-  login: (email: string, pass: string) => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<UserProfile>;
+  login: (email: string, pass: string) => Promise<UserProfile>;
   signupWithEmail: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
-  resetPassword: (email: string, newPass: string, pin?: string, ans?: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (identifier: string, newPass: string, pin?: string, ans?: string) => Promise<{ success: boolean; message: string }>;
   getCredentials: () => Promise<AuthCredentials>;
   saveCredentials: (creds: AuthCredentials) => Promise<void>;
+  getSuperAdminCredentials: () => Promise<SuperAdminCredentials>;
+  saveSuperAdminCredentials: (creds: SuperAdminCredentials) => Promise<void>;
+  changeSuperAdminPassword: (currentPassOrPin: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
+  updateUserProfile: (updates: Partial<UserProfile>) => void;
   isAuthenticated: boolean;
 }
 
@@ -42,7 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const saved = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.displayName && parsed.displayName.includes('(प्लॅटफॉर्म मालक)')) {
+          parsed.displayName = parsed.displayName.replace('(प्लॅटफॉर्म मालक)', '').trim();
+          sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -71,7 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentSession = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
       if (currentSession) {
         try {
-          setUserProfile(JSON.parse(currentSession));
+          const parsed = JSON.parse(currentSession);
+          if (parsed.displayName && parsed.displayName.includes('(प्लॅटफॉर्म मालक)')) {
+            parsed.displayName = parsed.displayName.replace('(प्लॅटफॉर्म मालक)', '').trim();
+            sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(parsed));
+          }
+          setUserProfile(parsed);
         } catch {
           setUserProfile(null);
         }
@@ -84,58 +104,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const loginWithEmail = async (email: string, pass: string) => {
+  const loginWithEmail = async (email: string, pass: string): Promise<UserProfile> => {
     setLoading(true);
-    const trimmedEmail = email.trim();
+    const trimmedEmail = email.trim().toLowerCase();
     const trimmedPass = pass.trim();
 
     if (!trimmedEmail || !trimmedPass) {
       setLoading(false);
-      throw new Error('कृपया शाळा ईमेल आयडी आणि पासवर्ड दोन्ही प्रविष्ट करा.');
+      throw new Error('कृपया शाळा ईमेल / युडायस क्रमांक आणि पासवर्ड प्रविष्ट करा.');
     }
 
     try {
-      // 1. Strict credential verification against master credentials
-      const verifyResult = await authCredentialsService.verifyLogin(trimmedEmail, trimmedPass);
-      if (!verifyResult.success) {
-        throw new Error(verifyResult.message || 'चुकीचा ईमेल किंवा पासवर्ड! वेबसाईट उघडण्यासाठी योग्य पासवर्ड आवश्यक आहे.');
-      }
+      // 1. Check if user is Super Admin (Owner of Shalaverse)
+      const cleanEmail = trimmedEmail.toLowerCase();
+      const isSuperAdminEmail = 
+        cleanEmail === 'p.ganeshkar8788@gmail.com' || 
+        cleanEmail === 'superadmin@shalaverse.in' ||
+        cleanEmail === 'superadmin@shalaverse.com' ||
+        cleanEmail === 'admin@shalaverse.in' ||
+        cleanEmail === 'superadmin' ||
+        cleanEmail === 'admin';
 
-      // 2. Set session-only persistence before signing in
-      try {
-        await setPersistence(auth, browserSessionPersistence);
-      } catch {
-        // ignore
-      }
-
-      // 3. Attempt Firebase Auth sign-in or auto-provision
-      try {
-        const cred = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPass);
-        setUser(cred.user);
-      } catch (err: any) {
-        if (
-          err.code === 'auth/user-not-found' || 
-          err.code === 'auth/invalid-credential' ||
-          err.code === 'auth/configuration-not-found'
-        ) {
-          try {
-            const newCred = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPass);
-            setUser(newCred.user);
-          } catch (e) {
-            // ignore
-          }
+      if (isSuperAdminEmail) {
+        const superVerify = await authCredentialsService.verifySuperAdminLogin(trimmedEmail, trimmedPass);
+        if (superVerify.success) {
+          const profile: UserProfile = {
+            uid: 'super-admin-' + Date.now(),
+            email: trimmedEmail,
+            displayName: 'Super Admin',
+            role: 'super_admin'
+          };
+          setUserProfile(profile);
+          sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
+          return profile;
+        } else {
+          throw new Error(superVerify.message || 'चुकीचा सुपर ॲडमिन पासवर्ड!');
         }
       }
 
-      // 4. Set authenticated session in sessionStorage (clears upon closing browser/tab)
-      const profile: UserProfile = {
-        uid: user?.uid || 'school-admin-' + Date.now(),
-        email: trimmedEmail,
-        displayName: trimmedEmail.split('@')[0] || 'School Admin',
-        role: 'admin'
-      };
-      setUserProfile(profile);
-      sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
+      // 2. Check if credentials belong to any registered Client School
+      const schoolVerify = await schoolService.verifySchoolLogin(trimmedEmail, trimmedPass);
+      if (schoolVerify.success && schoolVerify.school) {
+        const sch = schoolVerify.school;
+        const profile: UserProfile = {
+          uid: sch.id,
+          email: sch.email,
+          displayName: sch.schoolNameLocal || sch.schoolName,
+          role: 'school',
+          schoolId: sch.id
+        };
+        setUserProfile(profile);
+        sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
+        localStorage.setItem('shalaverse_active_school_id', sch.id);
+        localStorage.setItem('shalaverse_school_settings', JSON.stringify({
+          schoolName: sch.schoolName,
+          schoolNameLocal: sch.schoolNameLocal,
+          udiseNumber: sch.udiseNumber,
+          boardAffiliation: sch.boardAffiliation,
+          recognitionNo: sch.recognitionNo,
+          affiliationNo: sch.affiliationNo,
+          boardName: sch.boardName,
+          address: sch.address,
+          phone: sch.phone,
+          email: sch.email,
+          website: sch.website,
+          academicYear: sch.academicYear,
+          headmasterName: sch.headmasterName,
+          logoUrl: sch.logoUrl,
+          tagline: sch.tagline,
+          schoolId: sch.id
+        }));
+        return profile;
+      }
+
+      // If school was recognized but password was wrong or status inactive, report exact reason immediately
+      if (schoolVerify.error && !schoolVerify.error.includes('नोंदणीकृत नाही')) {
+        throw new Error(schoolVerify.error);
+      }
+
+      // 3. Fallback check for Master credentials if single school mode
+      const masterVerify = await authCredentialsService.verifyLogin(trimmedEmail, trimmedPass);
+      if (masterVerify.success) {
+        const profile: UserProfile = {
+          uid: 'school-admin-' + Date.now(),
+          email: trimmedEmail,
+          displayName: 'School Admin',
+          role: 'school',
+          schoolId: 'school_27070200119'
+        };
+        setUserProfile(profile);
+        sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(profile));
+        return profile;
+      }
+
+      // 4. Default error if no account matched
+      throw new Error(schoolVerify.error || masterVerify.message || 'चुकीचा ईमेल किंवा पासवर्ड! कृपया योग्य माहिती प्रविष्ट करा.');
+
     } finally {
       setLoading(false);
     }
@@ -189,6 +253,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authCredentialsService.saveCredentials(creds);
   };
 
+  const updateUserProfile = (updates: Partial<UserProfile>) => {
+    setUserProfile((prev) => {
+      if (!prev) return prev;
+      const updated: UserProfile = { ...prev, ...updates };
+      sessionStorage.setItem(SESSION_STORAGE_AUTH_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const getSuperAdminCredentials = async () => {
+    return await authCredentialsService.getSuperAdminCredentials();
+  };
+
+  const saveSuperAdminCredentials = async (creds: SuperAdminCredentials) => {
+    await authCredentialsService.saveSuperAdminCredentials(creds);
+    if (userProfile?.role === 'super_admin') {
+      updateUserProfile({
+        displayName: creds.name || userProfile.displayName || 'Super Admin',
+        email: creds.email || userProfile.email
+      });
+    }
+    if (auth.currentUser) {
+      if (creds.password) {
+        try {
+          await updatePassword(auth.currentUser, creds.password);
+        } catch (e) {
+          console.warn('Firebase Auth password sync skipped:', e);
+        }
+      }
+      if (creds.name) {
+        try {
+          await updateProfile(auth.currentUser, { displayName: creds.name });
+        } catch (e) {
+          console.warn('Firebase Auth profile displayName sync skipped:', e);
+        }
+      }
+    }
+  };
+
+  const changeSuperAdminPassword = async (currentPassOrPin: string, newPassword: string) => {
+    return await authCredentialsService.changeSuperAdminPassword(currentPassOrPin, newPassword);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -202,6 +309,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword,
         getCredentials,
         saveCredentials,
+        getSuperAdminCredentials,
+        saveSuperAdminCredentials,
+        changeSuperAdminPassword,
+        updateUserProfile,
         isAuthenticated: !!userProfile,
       }}
     >

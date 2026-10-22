@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useDeferredValue, ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, useDeferredValue, useCallback, ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Users, 
@@ -25,6 +25,7 @@ import { StudentViewModal } from '../components/students/StudentViewModal';
 import { ExcelImportModal } from '../components/students/ExcelImportModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { useSchool } from '../context/SchoolContext';
 import { 
   exportStudentsToExcel, 
   exportStudentsToCSV, 
@@ -33,6 +34,7 @@ import {
 
 export function StudentMaster() {
   const { t, language } = useLanguage();
+  const { currentSchool } = useSchool();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -52,10 +54,11 @@ export function StudentMaster() {
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchStudents = async () => {
+  const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await studentService.getAllStudents();
+      const activeId = currentSchool?.id;
+      const data = await studentService.getAllStudents(activeId);
       setStudents(data);
     } catch (err) {
       console.error('Failed to load students:', err);
@@ -63,11 +66,11 @@ export function StudentMaster() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [currentSchool?.id]);
 
   useEffect(() => {
     fetchStudents();
-  }, []);
+  }, [fetchStudents, currentSchool?.id]);
 
   // Sync with searchParams if they change
   useEffect(() => {
@@ -355,10 +358,12 @@ export function StudentMaster() {
               {students.length} {language === 'mr' ? 'नोंदी' : 'Records'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
-            {language === 'mr' 
-              ? 'जनरल रजिस्टर (GR) मुख्य नोंदी • क्लाउड डेटाबेस सिंक्रोनाइझ्ड' 
-              : 'General Register (GR) Master Records • Cloud Firestore Synchronized'}
+          <p className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-slate-800">
+              🏫 {language === 'mr' ? (currentSchool?.schoolNameLocal || currentSchool?.schoolName) : (currentSchool?.schoolName || currentSchool?.schoolNameLocal)}
+            </span>
+            <span>•</span>
+            <span className="font-mono text-slate-600">UDISE: {currentSchool?.udiseNumber || '-'}</span>
           </p>
         </div>
 

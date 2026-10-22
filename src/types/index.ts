@@ -56,9 +56,39 @@ export interface Student {
   certificateDate: string;
   headmasterSignature?: string;
 
+  // School Ownership
+  schoolId?: string;
+
   // Timestamps
   createdAt?: string | number | Date;
   updatedAt?: string | number | Date;
+}
+
+export interface School {
+  id: string; // unique ID e.g. "school_27070200119"
+  schoolName: string;
+  schoolNameLocal: string; // Marathi name
+  udiseNumber: string;
+  boardAffiliation: string;
+  recognitionNo?: string;
+  affiliationNo?: string;
+  boardName?: string;
+  address: string;
+  phone: string;
+  email: string; // Single login email for the school
+  password?: string; // Login password for the school
+  securityPin?: string;
+  website?: string;
+  academicYear: string;
+  headmasterName: string;
+  logoUrl?: string;
+  tagline?: string;
+  status: 'active' | 'inactive';
+  subscriptionPlan?: string;
+  expiryDate?: string;
+  studentCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SchoolSettings {
@@ -77,6 +107,7 @@ export interface SchoolSettings {
   headmasterName: string;
   logoUrl: string;
   tagline?: string;
+  schoolId?: string;
 }
 
 export interface DocumentLog {
@@ -90,11 +121,13 @@ export interface DocumentLog {
   academicYear: string;
   issuedBy: string;
   purpose?: string;
+  schoolId?: string;
 }
 
 export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
-  role: 'admin' | 'principal' | 'teacher' | 'clerk';
+  role: 'super_admin' | 'school' | 'admin' | 'principal' | 'teacher' | 'clerk';
+  schoolId?: string;
 }
