@@ -3,7 +3,7 @@ import { db } from '../firebase/config';
 import { School } from '../types';
 import { isFirestoreQuotaExceeded, recordQuotaExceeded, isQuotaExceededError } from '../utils/firestoreQuota';
 import { idbGetAllSchools, idbSaveAllSchools, idbPutSchool, idbDeleteSchool } from '../utils/indexedDb';
-import { getActivePassword, setActivePassword, isMatchingActivePassword } from '../utils/activePasswords';
+import { getActivePassword, setActivePassword, isMatchingActivePassword, cleanPasswordString } from '../utils/activePasswords';
 
 const COLLECTION_NAME = 'schools';
 const LOCAL_STORAGE_KEY = 'shalaverse_schools_cache';
@@ -541,7 +541,11 @@ export const schoolService = {
       (s.email || '').trim().toLowerCase() === cleanEmail ||
       (s.udiseNumber || '').trim().toLowerCase() === cleanEmail ||
       (s.id || '').trim().toLowerCase() === cleanEmail ||
-      (cleanDigits && cleanDigits.length >= 10 && (s.udiseNumber || '').trim().replace(/\D/g, '') === cleanDigits)
+      (cleanDigits && cleanDigits.length >= 10 && (s.udiseNumber || '').trim().replace(/\D/g, '') === cleanDigits) ||
+      (cleanEmail.length >= 4 && (
+        (s.schoolName && s.schoolName.toLowerCase().includes(cleanEmail)) ||
+        (s.schoolNameLocal && s.schoolNameLocal.includes(cleanEmail))
+      ))
     );
 
     if (!match) {
@@ -565,10 +569,13 @@ export const schoolService = {
     const validPass = (activePass || match.password || 'Shala@123').trim();
 
     // STRICT PASSWORD CHECK: ONLY the current valid password is accepted.
-    // Old passwords, default passwords, PINs, or backdoor variants MUST NOT work.
+    // Normalized to eliminate invisible Unicode characters or accidental whitespaces.
+    const normCleanPass = cleanPasswordString(cleanPass);
+    const normValidPass = cleanPasswordString(validPass);
+
     const isDirectMatch = 
-      cleanPass === validPass || 
-      cleanPass.toLowerCase() === validPass.toLowerCase();
+      normCleanPass === normValidPass || 
+      normCleanPass.toLowerCase() === normValidPass.toLowerCase();
 
     const isActiveMatch = isMatchingActivePassword(cleanPass, [
       match.id, 

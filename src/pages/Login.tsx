@@ -68,7 +68,7 @@ export function Login() {
         navigate('/dashboard');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
+      console.warn('Login attempt failed:', err?.message || err);
       setError(err?.message || (language === 'mr' ? 'चुकीचा ईमेल/युडायस किंवा पासवर्ड! कृपया योग्य माहिती प्रविष्ट करा.' : 'Authentication failed. Please check your credentials.'));
     } finally {
       setLoading(false);
@@ -206,20 +206,24 @@ export function Login() {
           {/* Notification Messages */}
           {error && (
             <div className="p-3.5 bg-red-950/80 border border-red-500/60 rounded-xl text-xs text-red-200 font-medium space-y-2">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-                <span>{error}</span>
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">{error}</span>
               </div>
-              <div className="flex items-center justify-end pt-1 border-t border-red-500/30">
+              <div className="flex items-center justify-between pt-2 border-t border-red-500/30">
+                <span className="text-slate-400 text-[11px]">
+                  {language === 'mr' ? 'पासवर्ड आठवत नाही?' : 'Trouble logging in?'}
+                </span>
                 <button
                   type="button"
                   onClick={() => {
                     setForgotEmail(email);
                     setShowForgotModal(true);
                   }}
-                  className="text-amber-300 hover:text-amber-200 font-semibold underline text-xs cursor-pointer"
+                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-xs cursor-pointer transition flex items-center gap-1.5"
                 >
-                  {language === 'mr' ? 'पासवर्ड रीसेट करा' : 'Reset Password'}
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>{language === 'mr' ? 'येथून त्वरित पासवर्ड रीसेट करा' : 'Reset Password Here'}</span>
                 </button>
               </div>
             </div>

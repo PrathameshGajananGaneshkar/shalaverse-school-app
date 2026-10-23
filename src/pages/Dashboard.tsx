@@ -121,8 +121,16 @@ export function Dashboard() {
       if (!data || data.length === 0) {
         setDocLogsCount(0);
       } else {
+        const studentKeySet = new Set<string>();
+        for (let i = 0; i < data.length; i++) {
+          const s = data[i];
+          if (s.id) studentKeySet.add(s.id);
+          if (s.studentId) studentKeySet.add(s.studentId);
+          if (s.grNumber) studentKeySet.add(String(s.grNumber).trim());
+        }
         const validLogs = (logs || []).filter(l => 
-          data.some(s => s.id === l.studentId || s.studentId === l.studentId || (s.grNumber && s.grNumber === l.grNumber))
+          (l.studentId && studentKeySet.has(l.studentId)) ||
+          (l.grNumber && studentKeySet.has(String(l.grNumber).trim()))
         );
         setDocLogsCount(validLogs.length);
       }
@@ -139,28 +147,35 @@ export function Dashboard() {
 
   // Compute metrics
   const totalStudents = students.length;
-  const currentYearStudents = students.filter(s => s.admissionYear === currentAcademicYear).length;
+  const currentYearStudents = useMemo(() => {
+    let count = 0;
+    for (let i = 0; i < students.length; i++) {
+      if (students[i].admissionYear === currentAcademicYear) count++;
+    }
+    return count;
+  }, [students, currentAcademicYear]);
   
-  // Class strength distribution with separate boys & girls
+  // Fast Class strength distribution with separate boys & girls
   const dashboardStats = useMemo(() => {
     let boys = 0;
     let girls = 0;
     const classBreakdown: Record<string, { total: number; boys: number; girls: number }> = {};
-    CLASS_OPTIONS.forEach(c => {
-      classBreakdown[c] = { total: 0, boys: 0, girls: 0 };
-    });
-    students.forEach(s => {
-      const g = getStudentGender(s);
-      if (g === 'Female') girls++;
+    for (let i = 0; i < CLASS_OPTIONS.length; i++) {
+      classBreakdown[CLASS_OPTIONS[i]] = { total: 0, boys: 0, girls: 0 };
+    }
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      const isGirl = s.gender === 'Female' || s.genderLocal === 'मुलगी' || s.gender === 'मुलगी';
+      if (isGirl) girls++;
       else boys++;
       const cls = s.admissionClass || '5th';
       if (!classBreakdown[cls]) {
         classBreakdown[cls] = { total: 0, boys: 0, girls: 0 };
       }
       classBreakdown[cls].total++;
-      if (g === 'Female') classBreakdown[cls].girls++;
+      if (isGirl) classBreakdown[cls].girls++;
       else classBreakdown[cls].boys++;
-    });
+    }
     return { boys, girls, classBreakdown };
   }, [students]);
 

@@ -34,7 +34,47 @@ function isDemoDocLog(log: DocumentLog): boolean {
   return false;
 }
 
+interface DocLogsCacheEntry {
+  schoolId: string;
+  timestamp: number;
+  logs: DocumentLog[];
+}
+let memoryDocLogsCache: DocLogsCacheEntry | null = null;
+
+export function invalidateDocLogsMemoryCache() {
+  memoryDocLogsCache = null;
+}
+
 export const documentService = {
+  // Synchronous doc logs lookup for 0ms instant rendering
+  getSynchronousDocumentLogs(schoolIdFilter?: string): DocumentLog[] {
+    const effectiveSchoolId = schoolIdFilter !== undefined
+      ? schoolIdFilter
+      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119');
+
+    const filterBySchool = (list: DocumentLog[]) => {
+      if (effectiveSchoolId === 'ALL') return list;
+      return list.filter(l => l.schoolId === effectiveSchoolId || (!l.schoolId && effectiveSchoolId === 'school_27070200119'));
+    };
+
+    if (memoryDocLogsCache && (effectiveSchoolId === 'ALL' || memoryDocLogsCache.schoolId === effectiveSchoolId)) {
+      return memoryDocLogsCache.logs;
+    }
+
+    try {
+      const local = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_LOG_KEY) : null;
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter(l => !isDemoDocLog(l));
+          return filterBySchool(cleaned);
+        }
+      }
+    } catch {}
+
+    return [];
+  },
+
   async logDocumentIssue(log: Omit<DocumentLog, 'id'>): Promise<void> {
     const activeSchoolId = log.schoolId || (typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119';
     const logWithSchool = {
@@ -56,13 +96,19 @@ export const documentService = {
       }
     }
 
-    // Save locally as fallback
+    // Save locally as fallback & update memory cache
     const current = await this.getDocumentLogs('ALL');
     const newLog: DocumentLog = {
       ...logWithSchool,
       id: `doc_${Date.now()}`
     };
-    localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify([newLog, ...current]));
+    const updated = [newLog, ...current];
+    localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(updated));
+    memoryDocLogsCache = {
+      schoolId: activeSchoolId,
+      timestamp: Date.now(),
+      logs: updated.filter(l => l.schoolId === activeSchoolId || (!l.schoolId && activeSchoolId === 'school_27070200119'))
+    };
   },
 
   async getDocumentLogs(schoolIdFilter?: string): Promise<DocumentLog[]> {
@@ -74,6 +120,15 @@ export const documentService = {
       if (effectiveSchoolId === 'ALL') return list;
       return list.filter(l => l.schoolId === effectiveSchoolId || (!l.schoolId && effectiveSchoolId === 'school_27070200119'));
     };
+
+    // 0. Super-fast in-memory path (< 0.1ms)
+    if (
+      memoryDocLogsCache &&
+      memoryDocLogsCache.schoolId === effectiveSchoolId &&
+      (Date.now() - memoryDocLogsCache.timestamp < 120000)
+    ) {
+      return memoryDocLogsCache.logs;
+    }
 
     if (!isFirestoreQuotaExceeded()) {
       try {
@@ -87,7 +142,13 @@ export const documentService = {
             }))
             .filter(l => !isDemoDocLog(l));
           localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(logs));
-          return filterBySchool(logs);
+          const result = filterBySchool(logs);
+          memoryDocLogsCache = {
+            schoolId: effectiveSchoolId,
+            timestamp: Date.now(),
+            logs: result
+          };
+          return result;
         }
       } catch (err) {
         if (isQuotaExceededError(err)) {
@@ -106,7 +167,13 @@ export const documentService = {
           if (cleaned.length !== parsed.length) {
             localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(cleaned));
           }
-          return filterBySchool(cleaned);
+          const result = filterBySchool(cleaned);
+          memoryDocLogsCache = {
+            schoolId: effectiveSchoolId,
+            timestamp: Date.now(),
+            logs: result
+          };
+          return result;
         }
       } catch {
         // ignore

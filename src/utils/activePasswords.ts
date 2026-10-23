@@ -11,6 +11,14 @@ interface StoredPasswordRecord {
   updatedAt: string;
 }
 
+export function cleanPasswordString(pass: string | undefined | null): string {
+  if (!pass) return '';
+  return pass
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\u00A0/g, ' ')
+    .trim();
+}
+
 function normalizeKey(key: string): string {
   return (key || '').trim().toLowerCase();
 }
@@ -40,7 +48,7 @@ export function getActivePassword(identifier: string): string | null {
 }
 
 export function setActivePassword(identifiers: (string | undefined | null)[], newPass: string): void {
-  const cleanPass = (newPass || '').trim();
+  const cleanPass = cleanPasswordString(newPass);
   if (!cleanPass) return;
 
   const store = getAllActivePasswords();
@@ -75,16 +83,17 @@ export function isMatchingActivePassword(
   inputPassword: string,
   identifiers: (string | undefined | null)[]
 ): boolean {
-  const cleanInput = (inputPassword || '').trim();
+  const cleanInput = cleanPasswordString(inputPassword);
   if (!cleanInput) return false;
 
   for (const id of identifiers) {
     if (!id) continue;
     const activePass = getActivePassword(id);
     if (activePass) {
+      const normActive = cleanPasswordString(activePass);
       if (
-        cleanInput === activePass ||
-        cleanInput.toLowerCase() === activePass.toLowerCase()
+        cleanInput === normActive ||
+        cleanInput.toLowerCase() === normActive.toLowerCase()
       ) {
         return true;
       }

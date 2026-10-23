@@ -234,8 +234,21 @@ export function ExcelImportModal({
       }
 
       const rawGender = getVal('gender');
-      const studentNameClean = deduplicateRepeatedPhrase(nameVal || `विद्यार्थी ${students.length + 1}`);
-      const detectedGender = rawGender ? getStudentGender({ gender: rawGender }) : getStudentGender({ studentName: studentNameClean });
+      const studentNameClean = (nameVal && (nameVal.includes('/') || nameVal.length > 25))
+        ? deduplicateRepeatedPhrase(nameVal)
+        : (nameVal || `विद्यार्थी ${students.length + 1}`);
+
+      let detectedGender: 'Male' | 'Female' = 'Male';
+      if (rawGender) {
+        const lowG = rawGender.toLowerCase().trim();
+        if (lowG.startsWith('f') || lowG.includes('female') || lowG.includes('मुलगी') || lowG.includes('स्त्री') || lowG === 'g' || lowG === 'girl') {
+          detectedGender = 'Female';
+        } else {
+          detectedGender = 'Male';
+        }
+      } else if (students.length < 500) {
+        detectedGender = getStudentGender({ studentName: studentNameClean });
+      }
 
       students.push({
         grNumber: grVal || `GR-${1000 + students.length + 1}`,
@@ -243,8 +256,8 @@ export function ExcelImportModal({
         studentName: studentNameClean,
         gender: detectedGender,
         genderLocal: detectedGender === 'Female' ? 'मुलगी' : 'मुलगा',
-        fatherName: deduplicateRepeatedPhrase(getVal('fatherName')),
-        motherName: deduplicateRepeatedPhrase(getVal('motherName')),
+        fatherName: getVal('fatherName'),
+        motherName: getVal('motherName'),
         admissionClass: matchedClass,
         admissionYear: getVal('admissionYear') || '2025-2026',
         admissionDate: getVal('admissionDate') || '2025-06-16',

@@ -7,7 +7,6 @@ import {
   LogOut, 
   School, 
   ChevronDown,
-  Sparkles,
   ShieldCheck,
   Crown,
   Building

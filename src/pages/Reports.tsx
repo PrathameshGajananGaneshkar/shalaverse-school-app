@@ -45,9 +45,11 @@ export function Reports() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ReportTab>('gr-master');
 
-  // Filters for GR Master
+  // Filters and Pagination for GR Master
   const [selectedClass, setSelectedClass] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<string>('');
+  const [masterPage, setMasterPage] = useState<number>(1);
+  const [masterPageSize, setMasterPageSize] = useState<number>(100);
 
   // Filters for Documents / Certificates Roster (TC, Nirgam, Bonafide)
   const [docTypeFilter, setDocTypeFilter] = useState<'all' | 'tc' | 'nirgam-utara' | 'bonafide'>('all');
@@ -74,22 +76,36 @@ export function Reports() {
     loadData();
   }, [currentSchool?.id]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setMasterPage(1);
+  }, [selectedClass, selectedYear]);
+
   const years = useMemo(() => {
     const set = new Set<string>();
-    students.forEach(s => {
-      if (s.admissionYear) set.add(s.admissionYear);
-    });
+    for (let i = 0; i < students.length; i++) {
+      const yr = students[i].admissionYear;
+      if (yr) set.add(yr);
+    }
     return Array.from(set).sort().reverse();
   }, [students]);
 
   // Filtered list
   const filteredStudents = useMemo(() => {
+    if (!selectedClass && !selectedYear) return students;
     return students.filter(s => {
       if (selectedClass && s.admissionClass !== selectedClass) return false;
       if (selectedYear && s.admissionYear !== selectedYear) return false;
       return true;
     });
   }, [students, selectedClass, selectedYear]);
+
+  const totalMasterPages = Math.ceil(filteredStudents.length / masterPageSize) || 1;
+  const validMasterPage = Math.min(Math.max(masterPage, 1), totalMasterPages);
+  const paginatedMasterStudents = useMemo(() => {
+    const start = (validMasterPage - 1) * masterPageSize;
+    return filteredStudents.slice(start, start + masterPageSize);
+  }, [filteredStudents, validMasterPage, masterPageSize]);
 
   // Class Strength Calculations (Separate Boys, Girls, and Total)
   const classStats = useMemo(() => {
@@ -154,16 +170,25 @@ export function Reports() {
 
     const seenKeys = new Set<string>();
 
+    // Upfront fast Map indexing
+    const studentById = new Map<string, Student>();
+    const studentByGr = new Map<string, Student>();
+    for (let i = 0; i < students.length; i++) {
+      const s = students[i];
+      if (s.id) studentById.set(s.id, s);
+      if (s.studentId) studentById.set(s.studentId, s);
+      if (s.grNumber) studentByGr.set(String(s.grNumber).trim(), s);
+    }
+
     // 1. Process documentLogs from database / service
     documentLogs.forEach((log, index) => {
       const docType: 'TC' | 'NIRGAM_UTARA' | 'BONAFIDE' = 
         log.documentType === 'BONAFIDE' ? 'BONAFIDE' :
         log.documentType === 'NIRGAM_UTARA' ? 'NIRGAM_UTARA' : 'TC';
 
-      const matchedStudent = students.find(s => 
-        (log.studentId && (s.id === log.studentId || s.studentId === log.studentId)) ||
-        (log.grNumber && s.grNumber && String(lTrim(s.grNumber)) === String(lTrim(log.grNumber)))
-      );
+      const matchedStudent = 
+        (log.studentId ? studentById.get(log.studentId) : undefined) ||
+        (log.grNumber ? studentByGr.get(String(log.grNumber).trim()) : undefined);
 
       const grNumber = log.grNumber || matchedStudent?.grNumber || '—';
       const studentName = log.studentName || matchedStudent?.studentName || '—';
@@ -191,11 +216,6 @@ export function Reports() {
         student: matchedStudent
       });
     });
-
-    // Helper for trimming strings
-    function lTrim(str?: string) {
-      return (str || '').trim();
-    }
 
     // 2. Include students who have certificateDate or leavingReason recorded on their profile
     students.forEach(s => {
@@ -645,50 +665,143 @@ export function Reports() {
 
         {/* TAB 1: General Register Master Sheet Table */}
         {activeTab === 'gr-master' && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs border border-slate-800">
-              <thead>
-                <tr className="bg-slate-900 text-white font-bold border-b border-slate-900">
-                  <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'जी.आर. क्र.' : 'GR No.'}</th>
-                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'विद्यार्थ्याचे पूर्ण नाव' : 'Student Full Name'}</th>
-                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'वडिलांचे नाव' : "Father's Name"}</th>
-                  <th className="p-2 border border-slate-700 w-16 text-center">{language === 'mr' ? 'लिंग' : 'Gender'}</th>
-                  <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'इयत्ता' : 'Class'}</th>
-                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'प्रवेश दिनांक' : 'Adm. Date'}</th>
-                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'जन्म दिनांक' : 'Birth Date'}</th>
-                  <th className="p-2 border border-slate-700">{language === 'mr' ? 'जात / धर्म' : 'Caste / Rel.'}</th>
-                  <th className="p-2 border border-slate-700 w-28">{language === 'mr' ? 'आधार क्र.' : 'UID (Aadhaar)'}</th>
-                  <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'मोबाईल' : 'Mobile'}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-300">
-                {filteredStudents.map((s, idx) => {
-                  const gender = getStudentGender(s);
-                  return (
-                    <tr key={s.id || idx} className="hover:bg-slate-50">
-                      <td className="p-2 border border-slate-300 font-mono font-bold text-slate-950">{s.grNumber}</td>
-                      <td className="p-2 border border-slate-300 font-bold uppercase">{s.studentName}</td>
-                      <td className="p-2 border border-slate-300">{s.fatherName || '-'}</td>
-                      <td className="p-2 border border-slate-300 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
-                          gender === 'Female' 
-                            ? 'bg-pink-100 text-pink-800 border border-pink-200' 
-                            : 'bg-blue-100 text-blue-800 border border-blue-200'
-                        }`}>
-                          {getGenderLabel(gender, language)}
-                        </span>
-                      </td>
-                      <td className="p-2 border border-slate-300 font-semibold">{s.admissionClass}</td>
-                      <td className="p-2 border border-slate-300 font-mono">{formatDate(s.admissionDate)}</td>
-                      <td className="p-2 border border-slate-300 font-mono">{formatDate(s.birthDate)}</td>
-                      <td className="p-2 border border-slate-300">{s.caste || '-'} ({s.religion || 'Hindu'})</td>
-                      <td className="p-2 border border-slate-300 font-mono">{s.uid || '-'}</td>
-                      <td className="p-2 border border-slate-300 font-mono">{s.mobile || '-'}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {/* Top Pagination Summary (Hidden when printing) */}
+            {filteredStudents.length > masterPageSize && (
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs print:hidden">
+                <span className="font-semibold text-slate-700">
+                  {language === 'mr' ? (
+                    <>एकूण <strong className="text-blue-900 font-bold">{filteredStudents.length}</strong> विद्यार्थ्यांपैकी {(validMasterPage - 1) * masterPageSize + 1} ते {Math.min(validMasterPage * masterPageSize, filteredStudents.length)} दाखवत आहे (पान {validMasterPage} / {totalMasterPages})</>
+                  ) : (
+                    <>Showing {(validMasterPage - 1) * masterPageSize + 1} to {Math.min(validMasterPage * masterPageSize, filteredStudents.length)} of <strong className="text-blue-900 font-bold">{filteredStudents.length}</strong> students (Page {validMasterPage} of {totalMasterPages})</>
+                  )}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span>{language === 'mr' ? 'प्रति पान:' : 'Per Page:'}</span>
+                  <select
+                    value={masterPageSize}
+                    onChange={(e) => {
+                      setMasterPageSize(Number(e.target.value));
+                      setMasterPage(1);
+                    }}
+                    className="bg-white border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-700"
+                  >
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={250}>250</option>
+                    <option value={500}>500</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={validMasterPage <= 1}
+                    onClick={() => setMasterPage(prev => Math.max(1, prev - 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-300 rounded text-xs font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    ◀ {language === 'mr' ? 'मागील' : 'Prev'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={validMasterPage >= totalMasterPages}
+                    onClick={() => setMasterPage(prev => Math.min(totalMasterPages, prev + 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-300 rounded text-xs font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {language === 'mr' ? 'पुढील' : 'Next'} ▶
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs border border-slate-800">
+                <thead>
+                  <tr className="bg-slate-900 text-white font-bold border-b border-slate-900">
+                    <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'जी.आर. क्र.' : 'GR No.'}</th>
+                    <th className="p-2 border border-slate-700">{language === 'mr' ? 'विद्यार्थ्याचे पूर्ण नाव' : 'Student Full Name'}</th>
+                    <th className="p-2 border border-slate-700">{language === 'mr' ? 'वडिलांचे नाव' : "Father's Name"}</th>
+                    <th className="p-2 border border-slate-700 w-16 text-center">{language === 'mr' ? 'लिंग' : 'Gender'}</th>
+                    <th className="p-2 border border-slate-700 w-16">{language === 'mr' ? 'इयत्ता' : 'Class'}</th>
+                    <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'प्रवेश दिनांक' : 'Adm. Date'}</th>
+                    <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'जन्म दिनांक' : 'Birth Date'}</th>
+                    <th className="p-2 border border-slate-700">{language === 'mr' ? 'जात / धर्म' : 'Caste / Rel.'}</th>
+                    <th className="p-2 border border-slate-700 w-28">{language === 'mr' ? 'आधार क्र.' : 'UID (Aadhaar)'}</th>
+                    <th className="p-2 border border-slate-700 w-24">{language === 'mr' ? 'मोबाईल' : 'Mobile'}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-300">
+                  {paginatedMasterStudents.map((s, idx) => {
+                    const gender = getStudentGender(s);
+                    return (
+                      <tr key={s.id || idx} className="hover:bg-slate-50">
+                        <td className="p-2 border border-slate-300 font-mono font-bold text-slate-950">{s.grNumber}</td>
+                        <td className="p-2 border border-slate-300 font-bold uppercase">{s.studentName}</td>
+                        <td className="p-2 border border-slate-300">{s.fatherName || '-'}</td>
+                        <td className="p-2 border border-slate-300 text-center">
+                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                            gender === 'Female' 
+                              ? 'bg-pink-100 text-pink-800 border border-pink-200' 
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          }`}>
+                            {getGenderLabel(gender, language)}
+                          </span>
+                        </td>
+                        <td className="p-2 border border-slate-300 font-semibold">{s.admissionClass}</td>
+                        <td className="p-2 border border-slate-300 font-mono">{formatDate(s.admissionDate)}</td>
+                        <td className="p-2 border border-slate-300 font-mono">{formatDate(s.birthDate)}</td>
+                        <td className="p-2 border border-slate-300">{s.caste || '-'} ({s.religion || 'Hindu'})</td>
+                        <td className="p-2 border border-slate-300 font-mono">{s.uid || '-'}</td>
+                        <td className="p-2 border border-slate-300 font-mono">{s.mobile || '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Bottom Pagination Controls (Hidden when printing) */}
+            {totalMasterPages > 1 && (
+              <div className="flex items-center justify-between pt-2 text-xs print:hidden">
+                <span className="text-slate-500">
+                  {language === 'mr' ? `पान ${validMasterPage} / एकूण ${totalMasterPages} पाने` : `Page ${validMasterPage} of ${totalMasterPages}`}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={validMasterPage <= 1}
+                    onClick={() => setMasterPage(1)}
+                    className="px-2 py-1 bg-white border border-slate-300 rounded font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    ««
+                  </button>
+                  <button
+                    type="button"
+                    disabled={validMasterPage <= 1}
+                    onClick={() => setMasterPage(prev => Math.max(1, prev - 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    ◀
+                  </button>
+                  <span className="px-3 py-1 bg-blue-50 text-blue-900 border border-blue-200 rounded font-bold font-mono">
+                    {validMasterPage}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={validMasterPage >= totalMasterPages}
+                    onClick={() => setMasterPage(prev => Math.min(totalMasterPages, prev + 1))}
+                    className="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    ▶
+                  </button>
+                  <button
+                    type="button"
+                    disabled={validMasterPage >= totalMasterPages}
+                    onClick={() => setMasterPage(totalMasterPages)}
+                    className="px-2 py-1 bg-white border border-slate-300 rounded font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    »»
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

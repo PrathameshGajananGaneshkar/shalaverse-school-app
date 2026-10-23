@@ -96,6 +96,10 @@ export function StudentMaster() {
   // Filtered student list
   const filteredStudents = useMemo(() => {
     const query = deferredSearchTerm.trim().toLowerCase();
+    if (!query && selectedStatus === 'all' && !selectedYear && !selectedClass) {
+      return students;
+    }
+
     return students.filter(student => {
       // Status filter (Active vs TC Issued)
       if (selectedStatus === 'active') {

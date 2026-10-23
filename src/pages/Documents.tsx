@@ -32,7 +32,6 @@ import { NirgamUtara } from '../components/documents/NirgamUtara';
 import { DocumentPreviewCanvas } from '../components/documents/DocumentPreviewCanvas';
 import { CertificateEditModal, CustomDocFields } from '../components/documents/CertificateEditModal';
 import { StudentTcHistoryModal } from '../components/documents/StudentTcHistoryModal';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import { formatDate } from '../utils/dateUtils';
 import { printCertificateElement } from '../utils/exportUtils';
 
@@ -140,22 +139,45 @@ export function Documents() {
     return 'mr';
   });
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState<string>(paramStudentId);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Instant synchronous initialization from memory or fast local storage (< 0.1ms)
+  const initialSchoolId = currentSchool?.id;
+  const initialCachedStudents = useMemo(() => {
+    return studentService.getSynchronousCachedStudents(initialSchoolId) || [];
+  }, [initialSchoolId]);
+
+  const initialCachedLogs = useMemo(() => {
+    return documentService.getSynchronousDocumentLogs(initialSchoolId) || [];
+  }, [initialSchoolId]);
+
+  const initialSelectedStudent = useMemo(() => {
+    if (paramStudentId && initialCachedStudents.length > 0) {
+      const match = initialCachedStudents.find(
+        s => s.id === paramStudentId || s.studentId === paramStudentId || s.grNumber === paramStudentId
+      );
+      if (match) return match;
+    }
+    return initialCachedStudents[0] || null;
+  }, [paramStudentId, initialCachedStudents]);
+
+  const [students, setStudents] = useState<Student[]>(() => initialCachedStudents);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
+    if (paramStudentId) return paramStudentId;
+    return initialSelectedStudent?.id || initialSelectedStudent?.studentId || '';
+  });
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(() => initialSelectedStudent);
+  const [isDataSyncing, setIsDataSyncing] = useState(false);
 
   // Customization fields
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [serialNumber, setSerialNumber] = useState('2026/108');
   const [bonafidePurpose, setBonafidePurpose] = useState('');
-  const [leavingReason, setLeavingReason] = useState('');
-  const [conduct, setConduct] = useState('');
-  const [progress, setProgress] = useState('');
+  const [leavingReason, setLeavingReason] = useState(() => initialSelectedStudent?.leavingReason || '');
+  const [conduct, setConduct] = useState(() => initialSelectedStudent?.behaviour || '');
+  const [progress, setProgress] = useState(() => initialSelectedStudent?.academicProgress || '');
   const [applicantName, setApplicantName] = useState('');
 
   // Logs
-  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
+  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>(() => initialCachedLogs);
   const [showLogs, setShowLogs] = useState(false);
 
   // Live Edit Modal state
@@ -214,14 +236,17 @@ export function Documents() {
   }, []);
 
   useEffect(() => {
+    let isCancelled = false;
     async function loadData() {
-      setLoading(true);
+      setIsDataSyncing(true);
       try {
         const activeId = currentSchool?.id;
         const [studentList, logs] = await Promise.all([
           studentService.getAllStudents(activeId),
           documentService.getDocumentLogs(activeId)
         ]);
+        if (isCancelled) return;
+
         setStudents(studentList);
         let validLogs: DocumentLog[] = [];
         if (studentList.length === 0) {
@@ -230,14 +255,33 @@ export function Documents() {
             documentService.deleteAllDocumentLogs().catch(() => {});
           }
         } else {
+          const stuKeySet = new Set<string>();
+          for (let i = 0; i < studentList.length; i++) {
+            const s = studentList[i];
+            if (s.id) stuKeySet.add(s.id);
+            if (s.studentId) stuKeySet.add(s.studentId);
+            if (s.grNumber) stuKeySet.add(String(s.grNumber).trim());
+          }
           validLogs = (logs || []).filter(l => 
-            studentList.some(s => s.id === l.studentId || s.studentId === l.studentId || (s.grNumber && s.grNumber === l.grNumber))
+            (l.studentId && stuKeySet.has(l.studentId)) ||
+            (l.grNumber && stuKeySet.has(String(l.grNumber).trim()))
           );
           setDocumentLogs(validLogs);
         }
 
-        // Issued students
-        const issued = studentList.filter(s => isStudentIssued(s, validLogs));
+        // Fast issued students Set
+        const issuedLogSet = new Set<string>();
+        for (const l of validLogs) {
+          if (l.studentId) issuedLogSet.add(l.studentId);
+          if (l.grNumber) issuedLogSet.add(String(l.grNumber).trim());
+        }
+        const issued = studentList.filter(s => 
+          (s.id && issuedLogSet.has(s.id)) ||
+          (s.studentId && issuedLogSet.has(s.studentId)) ||
+          (s.grNumber && issuedLogSet.has(String(s.grNumber).trim())) ||
+          (s.certificateDate && String(s.certificateDate).trim().length > 0) ||
+          (s.leavingReason && String(s.leavingReason).trim().length > 0)
+        );
 
         // Pre-select student
         if (paramStudentId) {
@@ -259,32 +303,47 @@ export function Documents() {
               setFilterMode('all');
             }
           }
-        } else if (filterMode === 'issued' && issued.length > 0) {
-          setSelectedStudent(issued[0]);
-          setSelectedStudentId(issued[0].id || issued[0].studentId);
-          if (issued[0].leavingReason) setLeavingReason(issued[0].leavingReason);
-          if (issued[0].behaviour) setConduct(issued[0].behaviour);
-          if (issued[0].academicProgress) setProgress(issued[0].academicProgress);
-          const hadTc = Boolean(getStudentTcIssueInfo(issued[0], validLogs));
-          setStudentHadTcPriorToSelection(hadTc);
-          setIsDuplicateMode(hadTc);
-        } else if (studentList.length > 0) {
-          setSelectedStudent(studentList[0]);
-          setSelectedStudentId(studentList[0].id || studentList[0].studentId);
-          if (studentList[0].leavingReason) setLeavingReason(studentList[0].leavingReason);
-          if (studentList[0].behaviour) setConduct(studentList[0].behaviour);
-          if (studentList[0].academicProgress) setProgress(studentList[0].academicProgress);
-          const hadTc = Boolean(getStudentTcIssueInfo(studentList[0], validLogs));
-          setStudentHadTcPriorToSelection(hadTc);
-          setIsDuplicateMode(hadTc);
+        } else {
+          setSelectedStudent(prevSelected => {
+            if (prevSelected && studentList.some(s => s.id === prevSelected.id || s.studentId === prevSelected.studentId)) {
+              return prevSelected;
+            }
+            if (filterMode === 'issued' && issued.length > 0) {
+              const firstIssued = issued[0];
+              setSelectedStudentId(firstIssued.id || firstIssued.studentId);
+              if (firstIssued.leavingReason) setLeavingReason(firstIssued.leavingReason);
+              if (firstIssued.behaviour) setConduct(firstIssued.behaviour);
+              if (firstIssued.academicProgress) setProgress(firstIssued.academicProgress);
+              const hadTc = Boolean(getStudentTcIssueInfo(firstIssued, validLogs));
+              setStudentHadTcPriorToSelection(hadTc);
+              setIsDuplicateMode(hadTc);
+              return firstIssued;
+            } else if (studentList.length > 0) {
+              const firstStudent = studentList[0];
+              setSelectedStudentId(firstStudent.id || firstStudent.studentId);
+              if (firstStudent.leavingReason) setLeavingReason(firstStudent.leavingReason);
+              if (firstStudent.behaviour) setConduct(firstStudent.behaviour);
+              if (firstStudent.academicProgress) setProgress(firstStudent.academicProgress);
+              const hadTc = Boolean(getStudentTcIssueInfo(firstStudent, validLogs));
+              setStudentHadTcPriorToSelection(hadTc);
+              setIsDuplicateMode(hadTc);
+              return firstStudent;
+            }
+            return null;
+          });
         }
       } catch (err) {
         console.error('Error fetching document data:', err);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setIsDataSyncing(false);
+        }
       }
     }
     loadData();
+    return () => {
+      isCancelled = true;
+    };
   }, [paramStudentId, currentSchool?.id]);
 
   const handleSelectStudent = (id: string) => {
@@ -345,22 +404,49 @@ export function Documents() {
     navigate(`/documents/${route}?${params.toString()}`);
   };
 
-  // Student filtering calculations
-  const issuedStudents = students.filter(s => isStudentIssued(s, documentLogs));
+  // Student filtering calculations optimized with useMemo and Set
+  const issuedIdSet = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of documentLogs) {
+      if (l.studentId) set.add(l.studentId);
+      if (l.grNumber) set.add(String(l.grNumber).trim());
+    }
+    return set;
+  }, [documentLogs]);
+
+  const issuedStudents = useMemo(() => {
+    return students.filter(s => 
+      (s.id && issuedIdSet.has(s.id)) ||
+      (s.studentId && issuedIdSet.has(s.studentId)) ||
+      (s.grNumber && issuedIdSet.has(String(s.grNumber).trim())) ||
+      (s.certificateDate && String(s.certificateDate).trim().length > 0) ||
+      (s.leavingReason && String(s.leavingReason).trim().length > 0)
+    );
+  }, [students, issuedIdSet]);
+
   const candidateStudents = filterMode === 'issued' ? issuedStudents : students;
 
-  const displayedStudents = candidateStudents.filter(s => {
-    if (!searchTerm.trim()) return true;
+  const displayedStudents = useMemo(() => {
     const q = searchTerm.toLowerCase().trim();
-    const nameEn = (s.studentName || '').toLowerCase();
-    const nameMr = (s.studentNameLocal || '').toLowerCase();
-    const gr = (s.grNumber || '').toLowerCase();
-    const cls = (s.admissionClass || '').toLowerCase();
-    const stuId = (s.studentId || '').toLowerCase();
-    const types = getIssuedTypesForStudent(s, documentLogs).join(' ').toLowerCase();
+    if (!q) {
+      return candidateStudents.slice(0, 50);
+    }
+    const matches: Student[] = [];
+    for (let i = 0; i < candidateStudents.length; i++) {
+      const s = candidateStudents[i];
+      const nameEn = (s.studentName || '').toLowerCase();
+      const nameMr = (s.studentNameLocal || '').toLowerCase();
+      const gr = (s.grNumber || '').toLowerCase();
+      const cls = (s.admissionClass || '').toLowerCase();
+      const stuId = (s.studentId || '').toLowerCase();
 
-    return nameEn.includes(q) || nameMr.includes(q) || gr.includes(q) || cls.includes(q) || stuId.includes(q) || types.includes(q);
-  });
+      if (nameEn.includes(q) || nameMr.includes(q) || gr.includes(q) || cls.includes(q) || stuId.includes(q)) {
+        matches.push(s);
+        if (matches.length >= 50) break;
+      }
+    }
+    return matches;
+  }, [candidateStudents, searchTerm]);
 
   const handleApplyModalChanges = async (
     updatedStudent: Student,
@@ -456,10 +542,6 @@ export function Documents() {
       setTimeout(() => setNotification(null), 4000);
     }
   };
-
-  if (loading) {
-    return <LoadingSpinner label="Loading document generator..." />;
-  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -1305,7 +1387,20 @@ export function Documents() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
-          <p className="text-sm text-slate-500">Please select or register a student to generate documents.</p>
+          {isDataSyncing ? (
+            <div className="flex flex-col items-center justify-center gap-3 text-slate-600">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-xs font-semibold">
+                {language === 'mr' ? 'माहिती अद्ययावत होत आहे...' : 'Syncing student details...'}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">
+              {language === 'mr'
+                ? 'दाखला तयार करण्यासाठी कृपया वरील शोध पेटीतून विद्यार्थी शोधा किंवा निवडा.'
+                : 'Please select or register a student to generate documents.'}
+            </p>
+          )}
         </div>
       )}
 

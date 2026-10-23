@@ -188,63 +188,35 @@ export async function idbGetStudentsBySchool(schoolId: string): Promise<Student[
 }
 
 export async function idbSaveAllStudents(students: Student[], schoolIdScope?: string): Promise<void> {
+  if (!students || students.length === 0) return;
   try {
     const db = await getIndexedDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STUDENTS_STORE], 'readwrite');
-      const store = transaction.objectStore(STUDENTS_STORE);
+    const BATCH_SIZE = 5000;
+    for (let offset = 0; offset < students.length; offset += BATCH_SIZE) {
+      const slice = students.slice(offset, offset + BATCH_SIZE);
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction([STUDENTS_STORE], 'readwrite');
+        const store = transaction.objectStore(STUDENTS_STORE);
 
-      if (schoolIdScope && schoolIdScope !== 'ALL') {
-        // Clean only records belonging to this school
-        if (store.indexNames.contains('schoolId')) {
-          const index = store.index('schoolId');
-          const cursorReq = index.openCursor(schoolIdScope);
-          cursorReq.onsuccess = (e) => {
-            const cursor = (e.target as IDBRequest<IDBCursorWithValue>).result;
-            if (cursor) {
-              cursor.delete();
-              cursor.continue();
-            }
-          };
+        for (let i = 0; i < slice.length; i++) {
+          const st = slice[i];
+          if (st && (st.id || st.studentId)) {
+            store.put(st);
+          }
         }
-      }
 
-      for (let i = 0; i < students.length; i++) {
-        if (students[i] && (students[i].id || students[i].studentId)) {
-          store.put(students[i]);
-        }
-      }
-
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(new Error('IDB transaction aborted'));
-    });
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(new Error('IDB transaction aborted'));
+      });
+    }
   } catch (err) {
     console.warn('idbSaveAllStudents error:', err);
   }
 }
 
 export async function idbSaveBulkStudents(students: Student[]): Promise<void> {
-  if (!students || students.length === 0) return;
-  try {
-    const db = await getIndexedDB();
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([STUDENTS_STORE], 'readwrite');
-      const store = transaction.objectStore(STUDENTS_STORE);
-
-      for (const st of students) {
-        if (st && (st.id || st.studentId)) {
-          store.put(st);
-        }
-      }
-
-      transaction.oncomplete = () => resolve();
-      transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(new Error('idbSaveBulkStudents transaction aborted'));
-    });
-  } catch (err) {
-    console.warn('idbSaveBulkStudents error:', err);
-  }
+  return idbSaveAllStudents(students);
 }
 
 export async function idbClearStudents(schoolId?: string): Promise<void> {

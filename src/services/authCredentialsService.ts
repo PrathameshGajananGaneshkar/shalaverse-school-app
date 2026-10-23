@@ -7,7 +7,7 @@ import {
   isQuotaExceededError 
 } from '../utils/firestoreQuota';
 import { schoolService } from './schoolService';
-import { getActivePassword, setActivePassword, isMatchingActivePassword } from '../utils/activePasswords';
+import { getActivePassword, setActivePassword, isMatchingActivePassword, cleanPasswordString } from '../utils/activePasswords';
 
 export interface AuthCredentials {
   adminEmail: string;
@@ -247,11 +247,12 @@ export const authCredentialsService = {
     }
 
     // Check against stored password (both strict and case-insensitive)
-    const storedPass = (creds.password || '').trim();
+    const normCleanPass = cleanPasswordString(cleanPass);
+    const normStoredPass = cleanPasswordString(creds.password);
 
     if (
-      cleanPass === storedPass ||
-      cleanPass.toLowerCase() === storedPass.toLowerCase()
+      normCleanPass === normStoredPass ||
+      normCleanPass.toLowerCase() === normStoredPass.toLowerCase()
     ) {
       return { success: true };
     }
@@ -398,10 +399,13 @@ export const authCredentialsService = {
       'shivajischool.chikhli@gmail.com'
     ]);
 
+    const normCleanPass = cleanPasswordString(cleanPass);
+    const normExpectedPass = cleanPasswordString(expectedPass);
+
     const isMatch = 
       isActiveMatch ||
-      cleanPass === expectedPass ||
-      passLower === expectedPass.toLowerCase();
+      normCleanPass === normExpectedPass ||
+      normCleanPass.toLowerCase() === normExpectedPass.toLowerCase();
 
     if (
       (cleanEmail === expectedEmail || cleanEmail === 'admin@shalaverse.edu' || cleanEmail === 'shivajischool.chikhli@gmail.com' || cleanEmail === '27070200119') && 
