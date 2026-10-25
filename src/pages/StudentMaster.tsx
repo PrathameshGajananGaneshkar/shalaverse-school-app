@@ -38,8 +38,12 @@ export function StudentMaster() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialCachedStudents = useMemo(() => {
+    return studentService.getSynchronousCachedStudents(currentSchool?.id) || [];
+  }, [currentSchool?.id]);
+
+  const [students, setStudents] = useState<Student[]>(() => initialCachedStudents);
+  const [loading, setLoading] = useState<boolean>(() => initialCachedStudents.length === 0);
   const [refreshing, setRefreshing] = useState(false);
 
   // Filter States
@@ -55,7 +59,9 @@ export function StudentMaster() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchStudents = useCallback(async () => {
-    setLoading(true);
+    if (students.length === 0) {
+      setLoading(true);
+    }
     try {
       const activeId = currentSchool?.id;
       const data = await studentService.getAllStudents(activeId);

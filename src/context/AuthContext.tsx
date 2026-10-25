@@ -62,7 +62,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    // If active session is already available in sessionStorage, skip the full-screen blocking loader
+    try {
+      return typeof window !== 'undefined' ? !sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY) : true;
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     // Initial fetch of credentials to make sure cache is updated
@@ -71,9 +78,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Configure session-only persistence in Firebase Auth
     setPersistence(auth, browserSessionPersistence).catch(() => {});
 
+    // Safety timeout: ensure full-page loader never hangs more than 500ms on mobile or desktop
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 500);
+
     // If there is NO active session in this browser tab/window, force log out immediately
     const activeSession = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
     if (!activeSession) {
+      clearTimeout(safetyTimer);
       signOut(auth).catch(() => {});
       setUser(null);
       setUserProfile(null);
@@ -82,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      clearTimeout(safetyTimer);
       setUser(currentUser);
       const currentSession = sessionStorage.getItem(SESSION_STORAGE_AUTH_KEY);
       if (currentSession) {
@@ -101,7 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   const loginWithEmail = async (email: string, pass: string): Promise<UserProfile> => {

@@ -130,17 +130,32 @@ export const documentService = {
       return memoryDocLogsCache.logs;
     }
 
+    // 1. Check local storage first for 0ms instant display
+    const local = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_LOG_KEY) : null;
+    let localCleanLogs: DocumentLog[] = [];
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          localCleanLogs = parsed.filter(l => !isDemoDocLog(l));
+        }
+      } catch {}
+    }
+
     if (!isFirestoreQuotaExceeded()) {
       try {
         const q = query(collection(db, COLLECTION_NAME), orderBy('issuedDate', 'desc'));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
+        const fetchPromise = getDocs(q);
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+        const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (snapshot && !snapshot.empty) {
           const logs = snapshot.docs
-            .map(d => ({
+            .map((d: any) => ({
               id: d.id,
               ...(d.data() as Omit<DocumentLog, 'id'>)
             }))
-            .filter(l => !isDemoDocLog(l));
+            .filter((l: DocumentLog) => !isDemoDocLog(l));
           localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(logs));
           const result = filterBySchool(logs);
           memoryDocLogsCache = {
@@ -158,26 +173,14 @@ export const documentService = {
       }
     }
 
-    const local = localStorage.getItem(LOCAL_LOG_KEY);
-    if (local !== null) {
-      try {
-        const parsed = JSON.parse(local);
-        if (Array.isArray(parsed)) {
-          const cleaned = parsed.filter(l => !isDemoDocLog(l));
-          if (cleaned.length !== parsed.length) {
-            localStorage.setItem(LOCAL_LOG_KEY, JSON.stringify(cleaned));
-          }
-          const result = filterBySchool(cleaned);
-          memoryDocLogsCache = {
-            schoolId: effectiveSchoolId,
-            timestamp: Date.now(),
-            logs: result
-          };
-          return result;
-        }
-      } catch {
-        // ignore
-      }
+    if (localCleanLogs.length > 0) {
+      const res = filterBySchool(localCleanLogs);
+      memoryDocLogsCache = {
+        schoolId: effectiveSchoolId,
+        timestamp: Date.now(),
+        logs: res
+      };
+      return res;
     }
 
     return [];

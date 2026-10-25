@@ -164,22 +164,20 @@ export async function idbGetStudentsBySchool(schoolId: string): Promise<Student[
       const transaction = db.transaction([STUDENTS_STORE], 'readonly');
       const store = transaction.objectStore(STUDENTS_STORE);
 
-      if (store.indexNames.contains('schoolId')) {
-        const index = store.index('schoolId');
-        const request = index.getAll(schoolId);
-        request.onsuccess = () => {
-          const list = request.result || [];
-          resolve(list);
-        };
-        request.onerror = () => reject(request.error);
-      } else {
-        const request = store.getAll();
-        request.onsuccess = () => {
-          const all = (request.result || []) as Student[];
-          resolve(all.filter(s => s.schoolId === schoolId || (!s.schoolId && schoolId === 'school_27070200119')));
-        };
-        request.onerror = () => reject(request.error);
-      }
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const all = (request.result || []) as Student[];
+        const isDefaultSchool = schoolId === 'school_27070200119' || schoolId === 'school_27040200119';
+        const filtered = all.filter(s => {
+          if (s.schoolId === schoolId) return true;
+          if (isDefaultSchool) {
+            return !s.schoolId || s.schoolId === 'school_27070200119' || s.schoolId === 'school_27040200119';
+          }
+          return false;
+        });
+        resolve(filtered);
+      };
+      request.onerror = () => reject(request.error);
     });
   } catch (err) {
     console.warn('idbGetStudentsBySchool error:', err);

@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { School } from '../types';
 import { isFirestoreQuotaExceeded, recordQuotaExceeded, isQuotaExceededError } from '../utils/firestoreQuota';
@@ -11,10 +11,10 @@ const DELETED_SCHOOLS_KEY = 'shalaverse_deleted_schools';
 const SEEDED_FLAG_KEY = 'shalaverse_schools_seeded';
 
 export const DEFAULT_INITIAL_SCHOOL: School = {
-  id: 'school_27070200119',
-  schoolName: 'Shri Shivaji High School and Junior College, Chikhli',
+  id: 'school_27040200119',
+  schoolName: 'Shree Shivaji High School and Junior College, Chikhli',
   schoolNameLocal: 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली',
-  udiseNumber: '27070200119',
+  udiseNumber: '27040200119',
   boardAffiliation: 'Shri Shivaji Shikshan Sanstha, Amravati – Managed by',
   recognitionNo: 'Kr. Va Di. Bu. Ji. Pa. / Secondary School / Inspection 11150 Education Department Buldhana, Dt. 18/10/65',
   affiliationNo: '04.03.016',
@@ -22,7 +22,7 @@ export const DEFAULT_INITIAL_SCHOOL: School = {
   address: 'Chikhli, Dist. Buldhana - 443201',
   phone: '(07264)-242113',
   email: 'shivajischool.chikhli@gmail.com',
-  password: 'Shala@123',
+  password: 'Shala@970',
   securityPin: '8788',
   website: 'https://shalaverse.edu.in',
   academicYear: '2026-2027',
@@ -39,6 +39,11 @@ export const DEFAULT_INITIAL_SCHOOL: School = {
 
 export const DEFAULT_INITIAL_SCHOOLS: School[] = [
   DEFAULT_INITIAL_SCHOOL,
+  {
+    ...DEFAULT_INITIAL_SCHOOL,
+    id: 'school_27070200119',
+    udiseNumber: '27070200119'
+  },
   {
     id: 'school_27340901205',
     schoolName: 'Chatrapati Shahu Maharaj Vidyalaya & Jr College, Kolhapur',
@@ -535,9 +540,10 @@ export const schoolService = {
     const cleanEmail = emailOrUdise.trim().toLowerCase();
     const cleanDigits = cleanEmail.replace(/\D/g, '');
     const cleanPass = pass.trim();
+    const normCleanPass = cleanPasswordString(cleanPass);
 
     const schools = await this.getAllSchools();
-    const match = schools.find(s => 
+    let match = schools.find(s => 
       (s.email || '').trim().toLowerCase() === cleanEmail ||
       (s.udiseNumber || '').trim().toLowerCase() === cleanEmail ||
       (s.id || '').trim().toLowerCase() === cleanEmail ||
@@ -548,51 +554,121 @@ export const schoolService = {
       ))
     );
 
+    // 1. Fast path: check against local active password or cached school object
+    if (match) {
+      if (match.status === 'inactive') {
+        return {
+          success: false,
+          error: 'या शाळेचे खाते सध्या तात्पुरते बंद / निलंबित (Inactive) आहे. कृपया सुपर ॲडमिनशी संपर्क साधा.'
+        };
+      }
+
+      const activePass = 
+        getActivePassword(match.id) || 
+        getActivePassword(match.udiseNumber) || 
+        getActivePassword(match.email) || 
+        getActivePassword(cleanEmail) ||
+        (cleanDigits && cleanDigits.length >= 10 ? getActivePassword(cleanDigits) : null);
+
+      const validPass = (activePass || match.password || 'Shala@123').trim();
+      const normValidPass = cleanPasswordString(validPass);
+
+      const isDirectMatch = 
+        normCleanPass === normValidPass || 
+        normCleanPass.toLowerCase() === normValidPass.toLowerCase();
+
+      const isActiveMatch = isMatchingActivePassword(cleanPass, [
+        match.id, 
+        match.email, 
+        match.udiseNumber, 
+        cleanEmail,
+        cleanDigits
+      ]);
+
+      if (isActiveMatch || isDirectMatch) {
+        return { 
+          success: true, 
+          school: {
+            ...match,
+            password: validPass
+          }
+        };
+      }
+    }
+
+    // 2. Direct Firestore Cloud Check (CRITICAL FOR CROSS-DEVICE SYNC: Mobile <-> Desktop)
+    // If the password was changed on Mobile and now user is logging in on Desktop (or vice-versa),
+    // query Firestore directly for the freshest cloud record before rejecting!
+    try {
+      if (match?.id) {
+        const docRef = doc(db, COLLECTION_NAME, match.id);
+        const freshSnap = await getDoc(docRef);
+        if (freshSnap.exists()) {
+          const freshSchool = { id: freshSnap.id, ...freshSnap.data() } as School;
+          const cloudPass = cleanPasswordString(freshSchool.password || '');
+          if (cloudPass && (normCleanPass === cloudPass || normCleanPass.toLowerCase() === cloudPass.toLowerCase())) {
+            // Synchronize with local device cache and active password store
+            setActivePassword([
+              freshSchool.id,
+              freshSchool.udiseNumber,
+              freshSchool.email,
+              cleanEmail,
+              cleanDigits
+            ], freshSchool.password);
+            await idbPutSchool(freshSchool);
+            if (memorySchoolsCache) {
+              memorySchoolsCache = memorySchoolsCache.map(s => s.id === freshSchool.id ? freshSchool : s);
+            }
+            return {
+              success: true,
+              school: freshSchool
+            };
+          }
+        }
+      }
+
+      // If not matched yet, refresh full list from Firestore (in case school ID or email differs)
+      const freshSchools = await this.fetchFromFirestoreDirect();
+      const freshMatch = freshSchools.find(s => 
+        (s.email || '').trim().toLowerCase() === cleanEmail ||
+        (s.udiseNumber || '').trim().toLowerCase() === cleanEmail ||
+        (s.id || '').trim().toLowerCase() === cleanEmail ||
+        (cleanDigits && cleanDigits.length >= 10 && (s.udiseNumber || '').trim().replace(/\D/g, '') === cleanDigits) ||
+        (cleanEmail.length >= 4 && (
+          (s.schoolName && s.schoolName.toLowerCase().includes(cleanEmail)) ||
+          (s.schoolNameLocal && s.schoolNameLocal.includes(cleanEmail))
+        ))
+      );
+
+      if (freshMatch) {
+        if (freshMatch.status === 'inactive') {
+          return {
+            success: false,
+            error: 'या शाळेचे खाते सध्या तात्पुरते बंद / निलंबित (Inactive) आहे. कृपया सुपर ॲडमिनशी संपर्क साधा.'
+          };
+        }
+        const cloudPass = cleanPasswordString(freshMatch.password || '');
+        if (cloudPass && (normCleanPass === cloudPass || normCleanPass.toLowerCase() === cloudPass.toLowerCase())) {
+          setActivePassword([
+            freshMatch.id,
+            freshMatch.udiseNumber,
+            freshMatch.email,
+            cleanEmail,
+            cleanDigits
+          ], freshMatch.password);
+          await idbPutSchool(freshMatch);
+          return {
+            success: true,
+            school: freshMatch
+          };
+        }
+      }
+    } catch (cloudErr) {
+      console.warn('Cross-device school verification sync error:', cloudErr);
+    }
+
     if (!match) {
       return { success: false, error: 'या ईमेल किंवा युडायस (UDISE) क्रमांकाची कोणतीही शाळा नोंदणीकृत नाही.' };
-    }
-
-    if (match.status === 'inactive') {
-      return {
-        success: false,
-        error: 'या शाळेचे खाते सध्या तात्पुरते बंद / निलंबित (Inactive) आहे. कृपया सुपर ॲडमिनशी संपर्क साधा.'
-      };
-    }
-
-    const activePass = 
-      getActivePassword(match.id) || 
-      getActivePassword(match.udiseNumber) || 
-      getActivePassword(match.email) || 
-      getActivePassword(cleanEmail) ||
-      (cleanDigits && cleanDigits.length >= 10 ? getActivePassword(cleanDigits) : null);
-
-    const validPass = (activePass || match.password || 'Shala@123').trim();
-
-    // STRICT PASSWORD CHECK: ONLY the current valid password is accepted.
-    // Normalized to eliminate invisible Unicode characters or accidental whitespaces.
-    const normCleanPass = cleanPasswordString(cleanPass);
-    const normValidPass = cleanPasswordString(validPass);
-
-    const isDirectMatch = 
-      normCleanPass === normValidPass || 
-      normCleanPass.toLowerCase() === normValidPass.toLowerCase();
-
-    const isActiveMatch = isMatchingActivePassword(cleanPass, [
-      match.id, 
-      match.email, 
-      match.udiseNumber, 
-      cleanEmail,
-      cleanDigits
-    ]);
-
-    if (isActiveMatch || isDirectMatch) {
-      return { 
-        success: true, 
-        school: {
-          ...match,
-          password: validPass
-        }
-      };
     }
 
     return {

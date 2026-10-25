@@ -67,7 +67,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     }
     return DEFAULT_INITIAL_SCHOOLS[0] || DEFAULT_INITIAL_SCHOOL;
   });
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
 
   // Super Admin detection
   const isSuperAdmin = Boolean(

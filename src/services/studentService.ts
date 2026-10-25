@@ -537,11 +537,13 @@ export const studentService = {
   getSynchronousCachedStudents(schoolIdFilter?: string): Student[] | null {
     const effectiveSchoolId = schoolIdFilter !== undefined
       ? schoolIdFilter
-      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119');
+      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27040200119');
+
+    const isDefaultSchool = (id: string) => id === 'school_27040200119' || id === 'school_27070200119';
 
     if (
       memoryStudentCache &&
-      (effectiveSchoolId === 'ALL' || memoryStudentCache.schoolId === effectiveSchoolId)
+      (effectiveSchoolId === 'ALL' || memoryStudentCache.schoolId === effectiveSchoolId || (isDefaultSchool(effectiveSchoolId) && isDefaultSchool(memoryStudentCache.schoolId)))
     ) {
       return memoryStudentCache.students;
     }
@@ -551,9 +553,16 @@ export const studentService = {
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const targetIsDefault = isDefaultSchool(effectiveSchoolId);
           const filterBySchool = (list: Student[]) => {
             if (effectiveSchoolId === 'ALL') return list;
-            return list.filter(s => s.schoolId === effectiveSchoolId || (!s.schoolId && effectiveSchoolId === 'school_27070200119'));
+            return list.filter(s => {
+              if (s.schoolId === effectiveSchoolId) return true;
+              if (targetIsDefault) {
+                return !s.schoolId || isDefaultSchool(s.schoolId);
+              }
+              return false;
+            });
           };
           return filterBySchool(parsed.filter((s: Student) => !isDemoStudent(s)));
         }
@@ -567,20 +576,29 @@ export const studentService = {
   async getAllStudents(schoolIdFilter?: string): Promise<Student[]> {
     const effectiveSchoolId = schoolIdFilter !== undefined
       ? schoolIdFilter
-      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27070200119');
+      : ((typeof window !== 'undefined' ? localStorage.getItem('shalaverse_active_school_id') : null) || 'school_27040200119');
 
-    // 0. Super-fast in-memory path (< 0.1ms) - prevents refetching/resorting 100k items on page transitions!
+    const isDefaultSchool = (id: string) => id === 'school_27040200119' || id === 'school_27070200119';
+
+    // 0. Super-fast in-memory path (< 0.1ms) - prevents refetching/resorting on page transitions!
     if (
       memoryStudentCache &&
-      memoryStudentCache.schoolId === effectiveSchoolId &&
+      (memoryStudentCache.schoolId === effectiveSchoolId || (isDefaultSchool(effectiveSchoolId) && isDefaultSchool(memoryStudentCache.schoolId))) &&
       (Date.now() - memoryStudentCache.timestamp < 300000)
     ) {
       return memoryStudentCache.students;
     }
 
+    const targetIsDefault = isDefaultSchool(effectiveSchoolId);
     const filterBySchool = (list: Student[]) => {
       if (effectiveSchoolId === 'ALL') return list;
-      return list.filter(s => s.schoolId === effectiveSchoolId || (!s.schoolId && effectiveSchoolId === 'school_27070200119'));
+      return list.filter(s => {
+        if (s.schoolId === effectiveSchoolId) return true;
+        if (targetIsDefault) {
+          return !s.schoolId || isDefaultSchool(s.schoolId);
+        }
+        return false;
+      });
     };
 
     // Proactively purge legacy demo students in background if not already marked purged
@@ -809,6 +827,22 @@ export const studentService = {
 
   // Get student by Firestore ID or studentId
   async getStudentById(id: string): Promise<Student | null> {
+    if (!id) return null;
+
+    // 1. Instant in-memory check (0ms)
+    if (memoryStudentCache && memoryStudentCache.students) {
+      const found = memoryStudentCache.students.find(s => s.id === id || s.studentId === id || s.grNumber === id);
+      if (found) return found;
+    }
+
+    // 2. Check IndexedDB (< 3ms)
+    try {
+      const idbAll = await idbGetAllStudents();
+      const found = idbAll.find(s => s.id === id || s.studentId === id || s.grNumber === id);
+      if (found) return found;
+    } catch {}
+
+    // 3. Fallback to Firestore
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
       const snapshot = await getDoc(docRef);
@@ -822,8 +856,8 @@ export const studentService = {
       console.warn('Could not fetch student by ID from Firestore:', err);
     }
 
-    // Fallback search in local cache
-    const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+    // 4. Fallback search in local cache
+    const cached = typeof window !== 'undefined' ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
     if (cached) {
       try {
         const list: Student[] = JSON.parse(cached);

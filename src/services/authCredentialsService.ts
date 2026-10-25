@@ -106,10 +106,8 @@ export const authCredentialsService = {
           ...DEFAULT_SUPER_ADMIN,
           ...data
         };
-        if (merged.email === 'p.ganeshkar8788@gmail.com') {
-          merged.email = 'admin@shalaverse.in';
-        }
-        if (activePass) {
+        // If no cloud password set, fallback to active pass
+        if (!merged.password && activePass) {
           merged.password = activePass;
         }
         localStorage.setItem(SUPER_ADMIN_STORAGE_KEY, JSON.stringify(merged));
@@ -123,9 +121,6 @@ export const authCredentialsService = {
       const saved = localStorage.getItem(SUPER_ADMIN_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.email === 'p.ganeshkar8788@gmail.com') {
-          parsed.email = 'admin@shalaverse.in';
-        }
         if (activePass) {
           parsed.password = activePass;
         }
@@ -162,14 +157,14 @@ export const authCredentialsService = {
     ], fullCreds.password);
 
     localStorage.setItem(SUPER_ADMIN_STORAGE_KEY, JSON.stringify(fullCreds));
-    if (!isFirestoreQuotaExceeded()) {
-      try {
-        const docRef = doc(db, 'settings', 'super_admin_credentials');
-        await setDoc(docRef, fullCreds, { merge: true });
-      } catch (err) {
-        if (isQuotaExceededError(err)) recordQuotaExceeded();
-        console.warn('Could not save super admin credentials to Firestore:', err);
-      }
+    
+    // Always persist to Firestore Cloud for cross-device sync (Mobile + Desktop)
+    try {
+      const docRef = doc(db, 'settings', 'super_admin_credentials');
+      await setDoc(docRef, fullCreds, { merge: true });
+    } catch (err) {
+      if (isQuotaExceededError(err)) recordQuotaExceeded();
+      console.warn('Could not save super admin credentials to Firestore:', err);
     }
   },
 
@@ -212,44 +207,70 @@ export const authCredentialsService = {
       updatedAt: new Date().toISOString()
     };
     localStorage.setItem(PLATFORM_SETTINGS_STORAGE_KEY, JSON.stringify(fullSettings));
-    if (!isFirestoreQuotaExceeded()) {
-      try {
-        const docRef = doc(db, 'settings', 'platform_settings');
-        await setDoc(docRef, fullSettings, { merge: true });
-      } catch (err) {
-        if (isQuotaExceededError(err)) recordQuotaExceeded();
-        console.warn('Could not save platform settings to Firestore:', err);
-      }
+    try {
+      const docRef = doc(db, 'settings', 'platform_settings');
+      await setDoc(docRef, fullSettings, { merge: true });
+    } catch (err) {
+      if (isQuotaExceededError(err)) recordQuotaExceeded();
+      console.warn('Could not save platform settings to Firestore:', err);
     }
   },
 
   async verifySuperAdminLogin(emailInput: string, passwordInput: string): Promise<{ success: boolean; message?: string }> {
-    const creds = await this.getSuperAdminCredentials();
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPass = passwordInput.trim();
+    const normCleanPass = cleanPasswordString(cleanPass);
 
     const allowedEmails = [
-      (creds.email || '').trim().toLowerCase(),
       'p.ganeshkar8788@gmail.com',
       'superadmin@shalaverse.in',
       'superadmin@shalaverse.com',
       'admin@shalaverse.in',
-      'superadmin'
+      'superadmin',
+      'admin'
     ];
 
-    if (!allowedEmails.includes(cleanEmail)) {
-      return { success: false, message: 'Super admin email not recognized.' };
-    }
-
-    // Check active instant password register
-    if (isMatchingActivePassword(cleanPass, allowedEmails)) {
+    // 1. Fast check against immediate active password store on this device
+    if (allowedEmails.includes(cleanEmail) && isMatchingActivePassword(cleanPass, allowedEmails)) {
       return { success: true };
     }
 
-    // Check against stored password (both strict and case-insensitive)
-    const normCleanPass = cleanPasswordString(cleanPass);
-    const normStoredPass = cleanPasswordString(creds.password);
+    // 2. Direct Firestore Cloud Query (Vital for Cross-Device sync when password was changed on Mobile/Desktop)
+    try {
+      const docRef = doc(db, 'settings', 'super_admin_credentials');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const cloudCreds = docSnap.data() as SuperAdminCredentials;
+        const cloudEmail = (cloudCreds.email || '').trim().toLowerCase();
+        const cloudPass = cleanPasswordString(cloudCreds.password || '');
+        const validEmails = [...allowedEmails, cloudEmail].filter(Boolean);
 
+        if (validEmails.includes(cleanEmail)) {
+          if (
+            cloudPass && 
+            (normCleanPass === cloudPass || normCleanPass.toLowerCase() === cloudPass.toLowerCase())
+          ) {
+            // Synchronize with local device cache
+            setActivePassword(validEmails, cloudCreds.password);
+            localStorage.setItem(SUPER_ADMIN_STORAGE_KEY, JSON.stringify({ ...DEFAULT_SUPER_ADMIN, ...cloudCreds }));
+            return { success: true };
+          }
+        }
+      }
+    } catch (cloudErr) {
+      console.warn('Cloud super admin verification warning:', cloudErr);
+    }
+
+    // 3. Fallback check against local cached credentials
+    const creds = await this.getSuperAdminCredentials();
+    const credEmail = (creds.email || '').trim().toLowerCase();
+    const allValidEmails = [...allowedEmails, credEmail].filter(Boolean);
+
+    if (!allValidEmails.includes(cleanEmail)) {
+      return { success: false, message: 'Super admin email not recognized.' };
+    }
+
+    const normStoredPass = cleanPasswordString(creds.password);
     if (
       normCleanPass === normStoredPass ||
       normCleanPass.toLowerCase() === normStoredPass.toLowerCase()
@@ -368,47 +389,64 @@ export const authCredentialsService = {
     setActivePassword([
       creds.adminEmail,
       '27070200119',
+      '27040200119',
       'shivajischool.chikhli@gmail.com'
     ], creds.passwordHash);
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(creds));
-    if (!isFirestoreQuotaExceeded()) {
-      try {
-        const docRef = doc(db, 'settings', 'auth_credentials');
-        await setDoc(docRef, creds, { merge: true });
-      } catch (err) {
-        if (isQuotaExceededError(err)) recordQuotaExceeded();
-        console.warn('Could not save auth credentials to Firestore:', err);
-      }
+    try {
+      const docRef = doc(db, 'settings', 'auth_credentials');
+      await setDoc(docRef, creds, { merge: true });
+    } catch (err) {
+      if (isQuotaExceededError(err)) recordQuotaExceeded();
+      console.warn('Could not save auth credentials to Firestore:', err);
     }
   },
 
   async verifyLogin(emailInput: string, passwordInput: string): Promise<{ success: boolean; message?: string }> {
-    const creds = await this.getCredentials();
     const cleanEmail = emailInput.trim().toLowerCase();
     const cleanPass = passwordInput.trim();
-    const passLower = cleanPass.toLowerCase();
-
-    const expectedEmail = creds.adminEmail.trim().toLowerCase();
-    const expectedPass = creds.passwordHash.trim();
-
-    const isActiveMatch = isMatchingActivePassword(cleanPass, [
-      expectedEmail, 
-      cleanEmail, 
-      '27070200119', 
-      'shivajischool.chikhli@gmail.com'
-    ]);
-
     const normCleanPass = cleanPasswordString(cleanPass);
-    const normExpectedPass = cleanPasswordString(expectedPass);
 
-    const isMatch = 
-      isActiveMatch ||
-      normCleanPass === normExpectedPass ||
-      normCleanPass.toLowerCase() === normExpectedPass.toLowerCase();
+    const checkAliases = [
+      cleanEmail,
+      '27070200119',
+      '27040200119',
+      'shivajischool.chikhli@gmail.com',
+      'admin@shalaverse.edu'
+    ];
+
+    // 1. Check local active instant password registry
+    if (isMatchingActivePassword(cleanPass, checkAliases)) {
+      return { success: true };
+    }
+
+    // 2. Fetch fresh from Firestore cloud (Cross-Device Mobile <-> Desktop sync)
+    try {
+      const docRef = doc(db, 'settings', 'auth_credentials');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const cloudData = docSnap.data() as AuthCredentials;
+        const cloudPass = cleanPasswordString(cloudData.passwordHash || '');
+        if (cloudPass && (normCleanPass === cloudPass || normCleanPass.toLowerCase() === cloudPass.toLowerCase())) {
+          setActivePassword(checkAliases, cloudData.passwordHash);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudData));
+          return { success: true };
+        }
+      }
+    } catch (e) {
+      console.warn('Firestore auth_credentials verify warning:', e);
+    }
+
+    // 3. Fallback to cached master credentials
+    const creds = await this.getCredentials();
+    const expectedEmail = creds.adminEmail.trim().toLowerCase();
+    const normExpectedPass = cleanPasswordString(creds.passwordHash);
+
+    const isMatch = normCleanPass === normExpectedPass || normCleanPass.toLowerCase() === normExpectedPass.toLowerCase();
 
     if (
-      (cleanEmail === expectedEmail || cleanEmail === 'admin@shalaverse.edu' || cleanEmail === 'shivajischool.chikhli@gmail.com' || cleanEmail === '27070200119') && 
+      (cleanEmail === expectedEmail || cleanEmail === 'admin@shalaverse.edu' || cleanEmail === 'shivajischool.chikhli@gmail.com' || cleanEmail === '27070200119' || cleanEmail === '27040200119') && 
       isMatch
     ) {
       return { success: true };
@@ -530,7 +568,12 @@ export const authCredentialsService = {
         });
 
         // Also update master credentials if default school
-        if (matchedSchool.id === 'school_27070200119' || matchedSchool.udiseNumber === '27070200119') {
+        if (
+          matchedSchool.id === 'school_27070200119' || 
+          matchedSchool.id === 'school_27040200119' || 
+          matchedSchool.udiseNumber === '27070200119' ||
+          matchedSchool.udiseNumber === '27040200119'
+        ) {
           try {
             const masterCreds = await this.getCredentials();
             await this.saveCredentials({
@@ -559,7 +602,9 @@ export const authCredentialsService = {
       cleanId === 'shivajischool.chikhli@gmail.com' || 
       cleanId === 'admin@shalaverse.edu' ||
       cleanId === '27070200119' ||
+      cleanId === '27040200119' ||
       digitsOnly === '27070200119' ||
+      digitsOnly === '27040200119' ||
       cleanId.includes('chikhli') ||
       cleanId.includes('shivaji');
 
@@ -575,7 +620,9 @@ export const authCredentialsService = {
         expectedEmail,
         'shivajischool.chikhli@gmail.com',
         '27070200119',
+        '27040200119',
         'school_27070200119',
+        'school_27040200119',
         cleanId
       ], trimmedNewPass);
 
@@ -586,6 +633,9 @@ export const authCredentialsService = {
       };
 
       await this.saveCredentials(updatedCreds);
+      try {
+        await schoolService.updateSchool('school_27040200119', { password: trimmedNewPass });
+      } catch {}
       try {
         await schoolService.updateSchool('school_27070200119', { password: trimmedNewPass });
       } catch {}

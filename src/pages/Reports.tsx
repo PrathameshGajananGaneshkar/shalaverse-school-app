@@ -40,9 +40,17 @@ export function Reports() {
   const { currentSchool } = useSchool();
   const navigate = useNavigate();
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialCachedStudents = useMemo(() => {
+    return studentService.getSynchronousCachedStudents(currentSchool?.id) || [];
+  }, [currentSchool?.id]);
+
+  const initialCachedLogs = useMemo(() => {
+    return documentService.getSynchronousDocumentLogs(currentSchool?.id) || [];
+  }, [currentSchool?.id]);
+
+  const [students, setStudents] = useState<Student[]>(() => initialCachedStudents);
+  const [documentLogs, setDocumentLogs] = useState<DocumentLog[]>(() => initialCachedLogs);
+  const [loading, setLoading] = useState<boolean>(() => initialCachedStudents.length === 0);
   const [activeTab, setActiveTab] = useState<ReportTab>('gr-master');
 
   // Filters and Pagination for GR Master
@@ -58,7 +66,9 @@ export function Reports() {
 
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
+      if (students.length === 0) {
+        setLoading(true);
+      }
       try {
         const activeId = currentSchool?.id;
         const [list, logs] = await Promise.all([

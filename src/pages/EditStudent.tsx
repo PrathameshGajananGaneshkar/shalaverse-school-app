@@ -12,8 +12,14 @@ export function EditStudent() {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  const [student, setStudent] = useState<Student | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialCachedStudent = () => {
+    if (!id) return null;
+    const cached = studentService.getSynchronousCachedStudents();
+    return cached?.find(s => s.id === id || s.studentId === id || s.grNumber === id) || null;
+  };
+
+  const [student, setStudent] = useState<Student | null>(initialCachedStudent);
+  const [loading, setLoading] = useState<boolean>(() => !initialCachedStudent());
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -21,10 +27,10 @@ export function EditStudent() {
   useEffect(() => {
     async function loadStudent() {
       if (!id) return;
-      setLoading(true);
+      if (!student) setLoading(true);
       try {
         const data = await studentService.getStudentById(id);
-        setStudent(data);
+        if (data) setStudent(data);
       } catch (err) {
         console.error('Error fetching student for edit:', err);
       } finally {

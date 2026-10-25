@@ -242,7 +242,7 @@ export function Settings() {
         updatedAt: nowStr
       };
 
-      // 1. Save specifically for this active school so no cross-school leak happens!
+      // 1. Save specifically for this active school and sync cloud credentials
       if (currentSchool?.id) {
         localStorage.setItem(`shalaverse_school_creds_${currentSchool.id}`, JSON.stringify(updatedCreds));
         await updateSchool(currentSchool.id, {
@@ -251,6 +251,7 @@ export function Settings() {
           securityPin: updatedCreds.securityPin,
           updatedAt: nowStr
         });
+        await saveCredentials(updatedCreds).catch(() => {});
       } else {
         await saveCredentials(updatedCreds);
       }

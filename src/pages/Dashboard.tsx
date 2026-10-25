@@ -100,16 +100,26 @@ export function Dashboard() {
 
   const currentAcademicYear = activeSchool.academicYear || '2026-2027';
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const initialCachedStudents = useMemo(() => {
+    return studentService.getSynchronousCachedStudents(currentSchool?.id) || [];
+  }, [currentSchool?.id]);
+
+  const initialCachedLogs = useMemo(() => {
+    return documentService.getSynchronousDocumentLogs(currentSchool?.id) || [];
+  }, [currentSchool?.id]);
+
+  const [students, setStudents] = useState<Student[]>(() => initialCachedStudents);
+  const [loading, setLoading] = useState<boolean>(() => initialCachedStudents.length === 0);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [studentToDelete, setStudentToDelete] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [docLogsCount, setDocLogsCount] = useState(0);
+  const [docLogsCount, setDocLogsCount] = useState<number>(() => initialCachedLogs.length);
 
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (students.length === 0) {
+      setLoading(true);
+    }
     try {
       const activeId = currentSchool?.id;
       const [data, logs] = await Promise.all([
