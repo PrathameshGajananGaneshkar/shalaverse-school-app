@@ -601,11 +601,6 @@ export const studentService = {
       });
     };
 
-    // Proactively purge legacy demo students in background if not already marked purged
-    if (typeof window !== 'undefined' && localStorage.getItem('shalaverse_demo_purged_permanently') !== 'true') {
-      void this.purgeAllDemoStudentsForever().catch(() => {});
-    }
-
     const isCleared = typeof window !== 'undefined' ? localStorage.getItem('shalaverse_cleared_at') : null;
 
     // 1. Ultra-Fast Path: load from IndexedDB scoped to this school (< 3ms)
@@ -616,9 +611,7 @@ export const studentService = {
       idbStudents = await idbGetStudentsBySchool(effectiveSchoolId);
     }
     
-    // Check if demo already permanently purged to avoid checking 100,000 items
-    const demoPurged = typeof window !== 'undefined' && localStorage.getItem('shalaverse_demo_purged_permanently') === 'true';
-    const cleanIdbStudents = demoPurged ? idbStudents : idbStudents.filter(s => !isDemoStudent(s));
+    const cleanIdbStudents = idbStudents.filter(s => !isDemoStudent(s));
 
     if (cleanIdbStudents.length > 0) {
       if (isCleared) {
@@ -647,7 +640,7 @@ export const studentService = {
       return [];
     }
 
-    // 2. Fetch from Firestore (Scoped query by schoolId to avoid downloading 1000 schools at once!)
+    // 2. Fetch from Firestore (Scoped query by schoolId with tight 1500ms timeout)
     try {
       let q;
       if (effectiveSchoolId !== 'ALL') {
@@ -657,12 +650,14 @@ export const studentService = {
       }
 
       const fetchPromise = getDocs(q);
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
       let snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
 
       // Fallback for default initial school if schoolId was unset on legacy records
-      if ((!snapshot || snapshot.empty) && effectiveSchoolId === 'school_27070200119') {
-        const fallbackSnap = await getDocs(collection(db, COLLECTION_NAME));
+      if ((!snapshot || snapshot.empty) && (effectiveSchoolId === 'school_27070200119' || effectiveSchoolId === 'school_27040200119')) {
+        const fallbackPromise = getDocs(collection(db, COLLECTION_NAME));
+        const fbTimeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+        const fallbackSnap: any = await Promise.race([fallbackPromise, fbTimeout]);
         if (fallbackSnap && !fallbackSnap.empty) {
           snapshot = fallbackSnap;
         }
@@ -670,11 +665,6 @@ export const studentService = {
       
       if (snapshot && !snapshot.empty) {
         const rawDocs = snapshot.docs;
-        const demoDocs = rawDocs.filter((d: any) => isDemoStudent({ id: d.id, ...d.data() }));
-        if (demoDocs.length > 0) {
-          void this.purgeAllDemoStudentsForever().catch(() => {});
-        }
-
         const students: Student[] = rawDocs
           .map((d: any) => ({
             id: d.id,

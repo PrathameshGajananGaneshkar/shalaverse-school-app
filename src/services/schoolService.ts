@@ -153,6 +153,7 @@ export const DEFAULT_INITIAL_SCHOOLS: School[] = [
 // In-memory memory cache for 0ms instantaneous lookup across 1000+ schools
 let memorySchoolsCache: School[] | null = null;
 let isBackgroundSyncing = false;
+let lastSchoolsSyncTimestamp = 0;
 
 export const schoolService = {
   getDeletedSchoolIds(): string[] {
@@ -240,6 +241,9 @@ export const schoolService = {
   // Background non-blocking sync from Firestore cloud
   async triggerBackgroundSync(): Promise<void> {
     if (isBackgroundSyncing || isFirestoreQuotaExceeded()) return;
+    const now = Date.now();
+    if (now - lastSchoolsSyncTimestamp < 300000) return; // Sync at most once per 5 minutes
+    lastSchoolsSyncTimestamp = now;
     isBackgroundSyncing = true;
     try {
       await this.fetchFromFirestoreDirect();
@@ -256,10 +260,12 @@ export const schoolService = {
 
     try {
       const colRef = collection(db, COLLECTION_NAME);
-      const snapshot = await getDocs(colRef);
-      if (!snapshot.empty) {
+      const fetchPromise = getDocs(colRef);
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+      const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
+      if (snapshot && !snapshot.empty) {
         schools = snapshot.docs
-          .map(d => ({
+          .map((d: any) => ({
             id: d.id,
             ...d.data()
           })) as School[];

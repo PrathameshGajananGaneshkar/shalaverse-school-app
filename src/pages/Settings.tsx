@@ -67,6 +67,15 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Non-blocking toast notification state (zero UI freezes)
+  const [toast, setToast] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToast({ text, type });
+    setTimeout(() => {
+      setToast(prev => (prev?.text === text ? null : prev));
+    }, 3500);
+  };
+
   // Super Admin View Toggle: 'platform' (Master SaaS Settings) or 'client_school' (Configuring client schools)
   const [superAdminTab, setSuperAdminTab] = useState<'platform' | 'client_school'>('platform');
   const [superAdminSubTab, setSuperAdminSubTab] = useState<'security' | 'platform_info' | 'defaults' | 'database'>('security');
@@ -258,12 +267,12 @@ export function Settings() {
 
       setCredsSuccess(true);
       setTimeout(() => setCredsSuccess(false), 3000);
-      alert(language === 'mr' 
+      showToast(language === 'mr' 
         ? `"${currentSchool?.schoolNameLocal || currentSchool?.schoolName || 'शाळेचा'}" लॉगिन पासवर्ड व सुरक्षा यशस्वीरित्या सेव्ह झाली आहे!` 
-        : `Login email and password for "${currentSchool?.schoolName || 'School'}" saved successfully!`);
+        : `Login email and password for "${currentSchool?.schoolName || 'School'}" saved successfully!`, 'success');
     } catch (err) {
       console.error('Failed to update credentials:', err);
-      alert(language === 'mr' ? 'पासवर्ड सेव्ह करताना त्रुटी आली.' : 'Error saving password.');
+      showToast(language === 'mr' ? 'पासवर्ड सेव्ह करताना त्रुटी आली.' : 'Error saving password.', 'error');
     } finally {
       setSavingCreds(false);
     }
@@ -296,9 +305,10 @@ export function Settings() {
       }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      showToast(language === 'mr' ? 'शाळेची माहिती यशस्वीरित्या अपडेट झाली आहे!' : 'School details updated successfully!', 'success');
     } catch (err) {
       console.error('Failed to update settings:', err);
-      alert('Error updating settings.');
+      showToast('Error updating settings.', 'error');
     } finally {
       setSaving(false);
     }
@@ -316,10 +326,10 @@ export function Settings() {
       await authCredentialsService.savePlatformSettings(updated);
       setPlatformSaveSuccess(true);
       setTimeout(() => setPlatformSaveSuccess(false), 3500);
-      alert('✅ प्लॅटफॉर्म माहिती व धोरणे क्लाऊडवर सुरक्षितपणे सेव्ह झाली आहेत!');
+      showToast('✅ प्लॅटफॉर्म माहिती व धोरणे क्लाऊडवर सुरक्षितपणे सेव्ह झाली आहेत!', 'success');
     } catch (err) {
       console.error('Error saving platform settings:', err);
-      alert('माहिती जतन करताना त्रुटी आली.');
+      showToast('माहिती जतन करताना त्रुटी आली.', 'error');
     } finally {
       setSavingPlatform(false);
     }
@@ -328,11 +338,11 @@ export function Settings() {
   const handleSaveSuperSecurity = async (e: FormEvent) => {
     e.preventDefault();
     if (!superAdminPassword.trim()) {
-      alert('कृपया पासवर्ड प्रविष्ट करा.');
+      showToast('कृपया पासवर्ड प्रविष्ट करा.', 'error');
       return;
     }
     if (!superAdminEmail.trim()) {
-      alert('कृपया ईमेल प्रविष्ट करा.');
+      showToast('कृपया ईमेल प्रविष्ट करा.', 'error');
       return;
     }
     setSavingSuperSecurity(true);
@@ -375,10 +385,10 @@ export function Settings() {
 
       setSuperSecuritySuccess(true);
       setTimeout(() => setSuperSecuritySuccess(false), 4000);
-      alert('✅ तुमचा नवीन पासवर्ड आणि सर्व माहिती क्लाऊडवर यशस्वीरित्या अपडेट झाली आहे!');
+      showToast('✅ तुमचा नवीन पासवर्ड आणि सर्व माहिती क्लाऊडवर यशस्वीरित्या अपडेट झाली आहे!', 'success');
     } catch (err) {
       console.error('Error saving super admin security:', err);
-      alert('पासवर्ड व माहिती जतन करताना त्रुटी आली.');
+      showToast('पासवर्ड व माहिती जतन करताना त्रुटी आली.', 'error');
     } finally {
       setSavingSuperSecurity(false);
     }
@@ -409,7 +419,7 @@ export function Settings() {
       setTimeout(() => setAllSchoolsExportSuccess(false), 3500);
     } catch (err) {
       console.error('Export all schools failed:', err);
-      alert('शाळांचा डेटा डाऊनलोड करताना त्रुटी आली.');
+      showToast('शाळांचा डेटा डाऊनलोड करताना त्रुटी आली.', 'error');
     } finally {
       setIsExportingAllSchools(false);
     }
@@ -436,10 +446,10 @@ export function Settings() {
       await updateSchool(selectedSchoolId, clientSchoolForm);
       setClientSchoolSuccess(true);
       setTimeout(() => setClientSchoolSuccess(false), 3000);
-      alert(`शाळा "${clientSchoolForm.schoolNameLocal || clientSchoolForm.schoolName}" चे तपशील यशस्वीरित्या अपडेट झाले आहेत!`);
+      showToast(`शाळा "${clientSchoolForm.schoolNameLocal || clientSchoolForm.schoolName}" चे तपशील यशस्वीरित्या अपडेट झाले आहेत!`, 'success');
     } catch (err) {
       console.error('Update client school error:', err);
-      alert('शाळा अपडेट करताना त्रुटी आली.');
+      showToast('शाळा अपडेट करताना त्रुटी आली.', 'error');
     } finally {
       setSavingClientSchool(false);
     }
@@ -503,7 +513,7 @@ export function Settings() {
       });
     } catch (err: any) {
       console.error('Export failed:', err);
-      alert('बॅकअप डाऊनलोड करताना त्रुटी आली: ' + (err?.message || 'अज्ञात त्रुटी'));
+      showToast('बॅकअप डाऊनलोड करताना त्रुटी आली: ' + (err?.message || 'अज्ञात त्रुटी'), 'error');
     } finally {
       setIsExporting(false);
     }
@@ -632,7 +642,26 @@ export function Settings() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-16">
+    <div className="space-y-6 max-w-5xl mx-auto pb-16 relative">
+      {/* Non-blocking feedback toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold border transition-all animate-in slide-in-from-top-4 duration-200 ${
+          toast.type === 'success' 
+            ? 'bg-emerald-900 text-white border-emerald-500 shadow-emerald-950/40' 
+            : 'bg-rose-900 text-white border-rose-500 shadow-rose-950/40'
+        }`}>
+          {toast.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" /> : <AlertCircle className="w-5 h-5 text-rose-400 shrink-0" />}
+          <span>{toast.text}</span>
+          <button 
+            type="button" 
+            onClick={() => setToast(null)} 
+            className="ml-2 text-white/70 hover:text-white p-1 rounded cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Navigation Back Button */}
       <div className="flex items-center justify-between print:hidden">
         <button

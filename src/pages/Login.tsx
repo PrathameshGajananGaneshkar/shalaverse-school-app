@@ -205,27 +205,9 @@ export function Login() {
 
           {/* Notification Messages */}
           {error && (
-            <div className="p-3.5 bg-red-950/80 border border-red-500/60 rounded-xl text-xs text-red-200 font-medium space-y-2">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span className="leading-relaxed">{error}</span>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-red-500/30">
-                <span className="text-slate-400 text-[11px]">
-                  {language === 'mr' ? 'पासवर्ड आठवत नाही?' : 'Trouble logging in?'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForgotEmail(email);
-                    setShowForgotModal(true);
-                  }}
-                  className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold text-xs cursor-pointer transition flex items-center gap-1.5"
-                >
-                  <KeyRound className="w-3.5 h-3.5" />
-                  <span>{language === 'mr' ? 'येथून त्वरित पासवर्ड रीसेट करा' : 'Reset Password Here'}</span>
-                </button>
-              </div>
+            <div className="p-3.5 bg-red-950/80 border border-red-500/60 rounded-xl text-xs text-red-200 font-medium flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{error}</span>
             </div>
           )}
 

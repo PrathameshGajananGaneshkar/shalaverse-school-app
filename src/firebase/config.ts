@@ -39,22 +39,13 @@ const databaseId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestor
 let firestoreInstance;
 try {
   firestoreInstance = initializeFirestore(app, {
-    experimentalAutoDetectLongPolling: true,
-    localCache: persistentLocalCache({
-      tabManager: persistentMultipleTabManager()
-    })
+    experimentalForceLongPolling: true
   }, databaseId);
 } catch {
   try {
-    firestoreInstance = initializeFirestore(app, {
-      experimentalAutoDetectLongPolling: true,
-    }, databaseId);
+    firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
   } catch {
-    try {
-      firestoreInstance = databaseId ? getFirestore(app, databaseId) : getFirestore(app);
-    } catch {
-      firestoreInstance = getFirestore(app);
-    }
+    firestoreInstance = getFirestore(app);
   }
 }
 
