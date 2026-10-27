@@ -188,11 +188,21 @@ export const schoolService = {
     const initialNonDeleted = DEFAULT_INITIAL_SCHOOLS.filter(s => !deletedIds.includes(s.id));
 
     const mergeWithDefaults = (list: School[]): School[] => {
+      const defaultSchoolMap = new Map<string, School>();
+      initialNonDeleted.forEach(s => defaultSchoolMap.set(s.id, s));
+
       const mergedMap = new Map<string, School>();
       initialNonDeleted.forEach(s => mergedMap.set(s.id, s));
+
       list.forEach(s => {
         if (!deletedIds.includes(s.id)) {
-          mergedMap.set(s.id, s);
+          const defaultInCode = defaultSchoolMap.get(s.id);
+          // If developer modified status in VS Code code for a default school, preserve that status!
+          if (defaultInCode && defaultInCode.status && defaultInCode.status !== s.status) {
+            mergedMap.set(s.id, { ...s, status: defaultInCode.status });
+          } else {
+            mergedMap.set(s.id, s);
+          }
         }
       });
       return Array.from(mergedMap.values()).map(s => {
@@ -279,11 +289,19 @@ export const schoolService = {
 
     // Merge initial default schools (if not deleted) with stored schools
     const initialNonDeleted = DEFAULT_INITIAL_SCHOOLS.filter(s => !deletedIds.includes(s.id));
+    const defaultSchoolMap = new Map<string, School>();
+    initialNonDeleted.forEach(s => defaultSchoolMap.set(s.id, s));
+
     const mergedMap = new Map<string, School>();
     initialNonDeleted.forEach(s => mergedMap.set(s.id, s));
     schools.forEach(s => {
       if (!deletedIds.includes(s.id)) {
-        mergedMap.set(s.id, s);
+        const defaultInCode = defaultSchoolMap.get(s.id);
+        if (defaultInCode && defaultInCode.status && defaultInCode.status !== s.status) {
+          mergedMap.set(s.id, { ...s, status: defaultInCode.status });
+        } else {
+          mergedMap.set(s.id, s);
+        }
       }
     });
 
