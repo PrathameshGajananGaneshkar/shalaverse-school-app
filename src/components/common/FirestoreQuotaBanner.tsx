@@ -8,6 +8,10 @@ import {
 import { useLanguage } from '../../context/LanguageContext';
 
 export function FirestoreQuotaBanner() {
+  return null;
+}
+
+export function _UnusedFirestoreQuotaBanner() {
   const { language } = useLanguage();
   const [isExceeded, setIsExceeded] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);

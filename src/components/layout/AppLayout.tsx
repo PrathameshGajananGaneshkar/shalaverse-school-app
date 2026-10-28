@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Header } from '../common/Header';
 import { Sidebar } from '../common/Sidebar';
 import { Footer } from '../common/Footer';
-import { FirestoreQuotaBanner } from '../common/FirestoreQuotaBanner';
 import { useSchool } from '../../context/SchoolContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Crown } from 'lucide-react';
@@ -42,11 +41,6 @@ export function AppLayout() {
           </div>
         </div>
       )}
-
-      {/* Quota limit alert if daily cloud writes are exhausted */}
-      <div className="print:hidden">
-        <FirestoreQuotaBanner />
-      </div>
 
       {/* Top Header Navigation (Hidden during printing) */}
       <div className="print:hidden">
