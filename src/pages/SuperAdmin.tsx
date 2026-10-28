@@ -650,15 +650,19 @@ export function SuperAdmin() {
                       type="button"
                       id={`btn-toggle-status-${school.id}`}
                       onClick={async () => {
-                        const targetStatus = isInactive ? 'active' : 'inactive';
-                        await toggleSchoolStatus(school.id, targetStatus);
-                        const schoolTitle = language === 'mr' ? (school.schoolNameLocal || school.schoolName) : (school.schoolName || school.schoolNameLocal);
-                        setNotification(
-                          targetStatus === 'inactive'
-                            ? (language === 'mr' ? `शाळा "${schoolTitle}" निलंबित (Suspend) केली आहे.` : `School "${schoolTitle}" suspended successfully.`)
-                            : (language === 'mr' ? `शाळा "${schoolTitle}" पुन्हा सुरू (Active) केली आहे.` : `School "${schoolTitle}" activated successfully.`)
-                        );
-                        setTimeout(() => setNotification(null), 3500);
+                        try {
+                          const targetStatus = isInactive ? 'active' : 'inactive';
+                          await toggleSchoolStatus(school.id, targetStatus);
+                          const schoolTitle = language === 'mr' ? (school.schoolNameLocal || school.schoolName) : (school.schoolName || school.schoolNameLocal);
+                          setNotification(
+                            targetStatus === 'inactive'
+                              ? (language === 'mr' ? `शाळा "${schoolTitle}" निलंबित (Suspend / Inactive) केली आहे.` : `School "${schoolTitle}" suspended successfully.`)
+                              : (language === 'mr' ? `शाळा "${schoolTitle}" पुन्हा सुरू (Active) केली आहे.` : `School "${schoolTitle}" activated successfully.`)
+                          );
+                          setTimeout(() => setNotification(null), 3500);
+                        } catch (err: any) {
+                          alert((language === 'mr' ? 'त्रुटी: ' : 'Error: ') + (err?.message || 'Status update failed'));
+                        }
                       }}
                       className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition cursor-pointer ${
                         isInactive

@@ -199,7 +199,10 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
       setCurrentSchool(prev => prev ? { ...prev, status } : null);
     }
     const updated = await schoolService.toggleSchoolStatus(id, status);
-    await loadSchools();
+    setAllSchools(prev => prev.map(s => s.id === id ? { ...s, ...updated, status } : s));
+    if (currentSchool?.id === id) {
+      setCurrentSchool(prev => prev ? { ...prev, ...updated, status } : null);
+    }
     return updated;
   };
 

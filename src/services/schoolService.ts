@@ -9,6 +9,7 @@ const COLLECTION_NAME = 'schools';
 const LOCAL_STORAGE_KEY = 'shalaverse_schools_cache';
 const DELETED_SCHOOLS_KEY = 'shalaverse_deleted_schools';
 const SEEDED_FLAG_KEY = 'shalaverse_schools_seeded';
+const STATUS_OVERRIDES_KEY = 'shalaverse_school_status_overrides';
 
 export const DEFAULT_INITIAL_SCHOOL: School = {
   id: 'school_27040200119',
@@ -182,35 +183,49 @@ export const schoolService = {
     } catch {}
   },
 
+  getStatusOverrides(): Record<string, 'active' | 'inactive'> {
+    try {
+      const raw = localStorage.getItem(STATUS_OVERRIDES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  },
+
+  setStatusOverride(id: string, status: 'active' | 'inactive'): void {
+    try {
+      const current = this.getStatusOverrides();
+      current[id] = status;
+      localStorage.setItem(STATUS_OVERRIDES_KEY, JSON.stringify(current));
+    } catch {}
+  },
+
   // Fetch all registered schools with Stale-While-Revalidate (0ms instant return + background sync)
   async getAllSchools(): Promise<School[]> {
     const deletedIds = this.getDeletedSchoolIds();
     const initialNonDeleted = DEFAULT_INITIAL_SCHOOLS.filter(s => !deletedIds.includes(s.id));
 
     const mergeWithDefaults = (list: School[]): School[] => {
-      const defaultSchoolMap = new Map<string, School>();
-      initialNonDeleted.forEach(s => defaultSchoolMap.set(s.id, s));
-
       const mergedMap = new Map<string, School>();
       initialNonDeleted.forEach(s => mergedMap.set(s.id, s));
 
+      // Overwrite defaults with live/stored schools (which include updates from user/SuperAdmin)
       list.forEach(s => {
         if (!deletedIds.includes(s.id)) {
-          const defaultInCode = defaultSchoolMap.get(s.id);
-          // If developer modified status in VS Code code for a default school, preserve that status!
-          if (defaultInCode && defaultInCode.status && defaultInCode.status !== s.status) {
-            mergedMap.set(s.id, { ...s, status: defaultInCode.status });
-          } else {
-            mergedMap.set(s.id, s);
-          }
+          mergedMap.set(s.id, s);
         }
       });
+
+      const overrides = this.getStatusOverrides();
+
       return Array.from(mergedMap.values()).map(s => {
         const activePass = getActivePassword(s.id) || getActivePassword(s.udiseNumber) || getActivePassword(s.email);
-        if (activePass) {
-          return { ...s, password: activePass };
-        }
-        return s;
+        const finalStatus = overrides[s.id] || s.status || 'active';
+        return {
+          ...s,
+          status: finalStatus,
+          password: activePass || s.password
+        };
       });
     };
 
@@ -506,6 +521,17 @@ export const schoolService = {
       }
       if (id === DEFAULT_INITIAL_SCHOOL.id) {
         DEFAULT_INITIAL_SCHOOL.password = partial.password;
+      }
+    }
+
+    if (partial.status) {
+      this.setStatusOverride(id, partial.status);
+      const defItem = DEFAULT_INITIAL_SCHOOLS.find(s => s.id === id);
+      if (defItem) {
+        defItem.status = partial.status;
+      }
+      if (id === DEFAULT_INITIAL_SCHOOL.id) {
+        DEFAULT_INITIAL_SCHOOL.status = partial.status;
       }
     }
 
