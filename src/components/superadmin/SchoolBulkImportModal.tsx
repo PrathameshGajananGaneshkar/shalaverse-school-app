@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { 
   Upload, 
@@ -31,6 +31,7 @@ export function SchoolBulkImportModal({
 }: SchoolBulkImportModalProps) {
   const { language } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<boolean>(false);
 
   const [parsedSchools, setParsedSchools] = useState<Partial<School>[]>([]);
   const [fileName, setFileName] = useState<string>('');
@@ -39,6 +40,37 @@ export function SchoolBulkImportModal({
   const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [importResult, setImportResult] = useState<{ success: boolean; count: number; errors: string[] } | null>(null);
   const [dragActive, setDragActive] = useState<boolean>(false);
+  const [isStudentFileWarning, setIsStudentFileWarning] = useState<boolean>(false);
+
+  const handleReset = () => {
+    setParsedSchools([]);
+    setFileName('');
+    setImportResult(null);
+    setProgress({ done: 0, total: 0 });
+    setIsStudentFileWarning(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleCancel = () => {
+    abortRef.current = true;
+    setIsUploading(false);
+    setIsProcessing(false);
+    handleReset();
+    onClose();
+  };
+
+  // Close modal on Escape key
+  useEffect(() => {
+    if (!isOpen) return;
+    abortRef.current = false;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -107,6 +139,11 @@ export function SchoolBulkImportModal({
   const handleFile = (file: File) => {
     if (!file) return;
     setFileName(file.name);
+    const isStudentLike = 
+      file.name.toLowerCase().includes('student') || 
+      file.name.toLowerCase().includes('विद्यार्थी') || 
+      file.name.toLowerCase().includes('विद्यार्थ्या');
+    setIsStudentFileWarning(isStudentLike);
     setIsProcessing(true);
     setImportResult(null);
 
@@ -186,35 +223,42 @@ export function SchoolBulkImportModal({
 
   const handleStartImport = async () => {
     if (parsedSchools.length === 0) return;
+    abortRef.current = false;
     setIsUploading(true);
     setProgress({ done: 0, total: parsedSchools.length });
 
     try {
       const result = await onImportSchools(parsedSchools, (done, total) => {
+        if (abortRef.current) {
+          throw new Error('Import cancelled');
+        }
         setProgress({ done, total });
       });
-      setImportResult(result);
+      if (!abortRef.current) {
+        setImportResult(result);
+      }
     } catch (err: any) {
-      setImportResult({
-        success: false,
-        count: 0,
-        errors: [err?.message || 'Upload failed']
-      });
+      if (!abortRef.current) {
+        setImportResult({
+          success: false,
+          count: 0,
+          errors: [err?.message || 'Upload failed']
+        });
+      }
     } finally {
       setIsUploading(false);
     }
   };
 
-  const handleReset = () => {
-    setParsedSchools([]);
-    setFileName('');
-    setImportResult(null);
-    setProgress({ done: 0, total: 0 });
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in-50">
+    <div 
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleCancel();
+        }
+      }}
+    >
       <div className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-auto flex flex-col max-h-[90vh]">
         
         {/* Header */}
@@ -240,7 +284,9 @@ export function SchoolBulkImportModal({
 
           <button
             type="button"
-            onClick={onClose}
+            id="btn-close-bulk-import-modal-x"
+            onClick={handleCancel}
+            aria-label="Close modal"
             className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -350,6 +396,22 @@ export function SchoolBulkImportModal({
                   {language === 'mr' ? 'दुसरी फाईल निवडा' : 'Choose Another File'}
                 </button>
               </div>
+
+              {isStudentFileWarning && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-xl p-3.5 text-xs flex items-start gap-2.5 shadow-2xs">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold text-amber-950">
+                      {language === 'mr' ? '⚠️ ही विद्यार्थ्यांची (Student) फाईल दिसते आहे!' : '⚠️ This looks like a Student Master file!'}
+                    </p>
+                    <p className="text-amber-800 leading-relaxed">
+                      {language === 'mr' 
+                        ? 'तुम्ही "शाळा नोंदणी" (School Bulk Import) विंडोमध्ये विद्यार्थ्यांची एक्सेल फाईल निवडली आहे. जर तुम्हाला विद्यार्थी जोडायचे असतील, तर आधी शाळेचा डॅशबोर्ड उघडून "विद्यार्थी व्यवस्थापन" (Student Management) मधील एक्सेल इम्पोर्ट वापरा. ही विंडो फक्त नवीन शाळा नोंदवण्यासाठी आहे.'
+                        : 'You selected a student file in the School Import window. If you wish to import students, please use Student Management Excel Import inside the school dashboard.'}
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Preview Table */}
               <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
@@ -472,11 +534,12 @@ export function SchoolBulkImportModal({
           <div className="flex items-center gap-3 ml-auto">
             <button
               type="button"
-              onClick={onClose}
-              disabled={isUploading}
-              className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+              id="btn-cancel-bulk-schools-import"
+              onClick={handleCancel}
+              className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-100 active:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer shadow-2xs active:scale-95 flex items-center gap-1.5"
             >
-              {language === 'mr' ? 'रद्द करा' : 'Cancel'}
+              <X className="w-3.5 h-3.5 text-slate-500" />
+              <span>{language === 'mr' ? 'रद्द करा (Cancel)' : 'Cancel'}</span>
             </button>
 
             {parsedSchools.length > 0 && !importResult && (

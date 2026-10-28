@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { School } from '../types';
 import { isFirestoreQuotaExceeded, recordQuotaExceeded, isQuotaExceededError } from '../utils/firestoreQuota';
@@ -286,7 +286,8 @@ export const schoolService = {
     try {
       const colRef = collection(db, COLLECTION_NAME);
       const fetchPromise = getDocs(colRef);
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+      // Allow 7s for mobile cellular networks to connect without prematurely dropping cloud records
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 7000));
       const snapshot: any = await Promise.race([fetchPromise, timeoutPromise]);
       if (snapshot && !snapshot.empty) {
         schools = snapshot.docs
@@ -302,32 +303,81 @@ export const schoolService = {
       console.warn('Could not fetch schools from Firestore:', err);
     }
 
-    // Merge initial default schools (if not deleted) with stored schools
+    // Merge default schools with cloud records. Stored/cloud data ALWAYS wins!
     const initialNonDeleted = DEFAULT_INITIAL_SCHOOLS.filter(s => !deletedIds.includes(s.id));
-    const defaultSchoolMap = new Map<string, School>();
-    initialNonDeleted.forEach(s => defaultSchoolMap.set(s.id, s));
-
     const mergedMap = new Map<string, School>();
     initialNonDeleted.forEach(s => mergedMap.set(s.id, s));
     schools.forEach(s => {
       if (!deletedIds.includes(s.id)) {
-        const defaultInCode = defaultSchoolMap.get(s.id);
-        if (defaultInCode && defaultInCode.status && defaultInCode.status !== s.status) {
-          mergedMap.set(s.id, { ...s, status: defaultInCode.status });
-        } else {
-          mergedMap.set(s.id, s);
-        }
+        mergedMap.set(s.id, s);
       }
     });
 
-    const finalSchools = Array.from(mergedMap.values());
+    const overrides = this.getStatusOverrides();
+    const finalSchools = Array.from(mergedMap.values()).map(s => {
+      // Cloud database status is authoritative across devices
+      const cloudMatch = schools.find(sc => sc.id === s.id);
+      const finalStatus = (cloudMatch && cloudMatch.status) || overrides[s.id] || s.status || 'active';
+      return {
+        ...s,
+        status: finalStatus
+      };
+    });
+
     memorySchoolsCache = finalSchools;
     idbSaveAllSchools(finalSchools).catch(() => {});
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(finalSchools.slice(0, 200)));
       localStorage.setItem(SEEDED_FLAG_KEY, 'true');
     } catch {}
+
+    // Dispatch real-time sync event to all components on this client
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shalaverse_schools_updated', { detail: finalSchools }));
+    }
+
     return finalSchools;
+  },
+
+  // Real-time Firestore sync across all devices (Desktop, Mobile, Tablets)
+  subscribeToSchools(callback: (schools: School[]) => void): () => void {
+    try {
+      const colRef = collection(db, COLLECTION_NAME);
+      const unsubscribe = onSnapshot(colRef, (snapshot) => {
+        if (!snapshot.empty) {
+          const deletedIds = this.getDeletedSchoolIds();
+          const firestoreSchools = snapshot.docs
+            .map(d => ({ id: d.id, ...d.data() } as School))
+            .filter(s => !deletedIds.includes(s.id));
+
+          const initialNonDeleted = DEFAULT_INITIAL_SCHOOLS.filter(s => !deletedIds.includes(s.id));
+          const map = new Map<string, School>();
+          initialNonDeleted.forEach(s => map.set(s.id, s));
+          firestoreSchools.forEach(s => map.set(s.id, s));
+
+          const merged = Array.from(map.values()).map(s => {
+            const activePass = getActivePassword(s.id) || getActivePassword(s.udiseNumber) || getActivePassword(s.email);
+            return {
+              ...s,
+              password: activePass || s.password
+            };
+          });
+
+          memorySchoolsCache = merged;
+          idbSaveAllSchools(merged).catch(() => {});
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged.slice(0, 200)));
+          } catch {}
+
+          callback(merged);
+        }
+      }, (err) => {
+        console.warn('Firestore real-time subscription note:', err);
+      });
+      return unsubscribe;
+    } catch {
+      return () => {};
+    }
   },
 
   // Get single school by ID (instant O(1))

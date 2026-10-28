@@ -115,6 +115,34 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadSchools();
+
+    // 1. Listen for background sync updates on this device
+    const handleSchoolsUpdated = (e: any) => {
+      if (e?.detail && Array.isArray(e.detail)) {
+        setAllSchools(e.detail);
+        setCurrentSchool(prev => {
+          if (!prev) return prev;
+          const match = e.detail.find((s: School) => s.id === prev.id);
+          return match || prev;
+        });
+      }
+    };
+    window.addEventListener('shalaverse_schools_updated', handleSchoolsUpdated);
+
+    // 2. Real-time Firebase cloud listener across all devices (Desktop, Mobile, etc.)
+    const unsubscribe = schoolService.subscribeToSchools((freshSchools) => {
+      setAllSchools(freshSchools);
+      setCurrentSchool(prev => {
+        if (!prev) return prev;
+        const match = freshSchools.find(s => s.id === prev.id);
+        return match || prev;
+      });
+    });
+
+    return () => {
+      window.removeEventListener('shalaverse_schools_updated', handleSchoolsUpdated);
+      unsubscribe();
+    };
   }, [loadSchools]);
 
   // Switch active school (Super Admin or preview)
