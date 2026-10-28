@@ -135,6 +135,26 @@ export async function idbDeleteSchool(id: string): Promise<void> {
   }
 }
 
+export async function idbResetSchools(defaultSchools: School[]): Promise<void> {
+  try {
+    const db = await getIndexedDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([SCHOOLS_STORE], 'readwrite');
+      const store = transaction.objectStore(SCHOOLS_STORE);
+      store.clear();
+      for (const s of defaultSchools) {
+        if (s && s.id) {
+          store.put(s);
+        }
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } catch (err) {
+    console.warn('idbResetSchools error:', err);
+  }
+}
+
 // ==========================================
 // STUDENTS INDEXEDDB OPERATIONS
 // ==========================================

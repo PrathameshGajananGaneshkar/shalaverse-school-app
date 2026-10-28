@@ -27,7 +27,9 @@ import {
   X,
   FileSpreadsheet,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { useSchool } from '../context/SchoolContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -35,6 +37,7 @@ import { useAuth } from '../context/AuthContext';
 import { School } from '../types';
 import { formatDate } from '../utils/dateUtils';
 import { SchoolBulkImportModal } from '../components/superadmin/SchoolBulkImportModal';
+import { DEFAULT_INITIAL_SCHOOLS } from '../services/schoolService';
 
 export function SuperAdmin() {
   const { 
@@ -46,6 +49,7 @@ export function SuperAdmin() {
     deleteSchool, 
     toggleSchoolStatus, 
     bulkAddSchools,
+    resetBulkSchools,
     loading, 
     isSuperAdmin 
   } = useSchool();
@@ -149,6 +153,39 @@ export function SuperAdmin() {
 
   // Bulk Import Modal State
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+
+  // Default schools ID set & imported schools count
+  const defaultSchoolIds = useMemo(() => new Set(DEFAULT_INITIAL_SCHOOLS.map(s => s.id)), []);
+  const importedSchoolsCount = useMemo(() => {
+    return allSchools.filter(s => !defaultSchoolIds.has(s.id)).length;
+  }, [allSchools, defaultSchoolIds]);
+
+  // Bulk Reset State
+  const [isResetBulkModalOpen, setIsResetBulkModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetProgress, setResetProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+
+  const handleConfirmResetBulk = async () => {
+    setIsResetting(true);
+    setResetProgress({ done: 0, total: importedSchoolsCount });
+    try {
+      const res = await resetBulkSchools((done, total) => {
+        setResetProgress({ done, total });
+      });
+      setNotification(
+        language === 'mr'
+          ? `सर्व ${res.deletedCount || importedSchoolsCount} बल्क शाळा यशस्वीरित्या हटवल्या आणि सिस्टीम रिसेट केली!`
+          : `Successfully removed ${res.deletedCount || importedSchoolsCount} bulk schools and reset to defaults!`
+      );
+      setIsResetBulkModalOpen(false);
+      setTimeout(() => setNotification(null), 4000);
+    } catch (err: any) {
+      console.error('Reset bulk schools error:', err);
+      setNotification(language === 'mr' ? 'बल्क शाळा रिसेट करताना त्रुटी आली.' : 'Failed to reset bulk schools.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // High-performance Pagination for 1000+ Schools
   const [currentPage, setCurrentPage] = useState(1);
@@ -338,6 +375,22 @@ export function SuperAdmin() {
           >
             <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
             <span>{language === 'mr' ? '१०००+ शाळा एक्सेल इम्पोर्ट' : 'Bulk Import 1000+ Schools'}</span>
+          </button>
+
+          <button
+            type="button"
+            id="btn-reset-bulk-schools"
+            onClick={() => setIsResetBulkModalOpen(true)}
+            className="px-4 py-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-black text-sm rounded-xl shadow-lg shadow-rose-950/40 flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 border border-rose-400/30"
+            title={language === 'mr' ? 'बल्क आयात केलेल्या शाळा रिसेट / हटवा' : 'Reset Bulk Imported Schools'}
+          >
+            <RotateCcw className="w-4 h-4 text-rose-200" />
+            <span>{language === 'mr' ? 'बल्क शाळा रिसेट' : 'Reset Bulk Schools'}</span>
+            {importedSchoolsCount > 0 && (
+              <span className="px-2 py-0.5 bg-rose-950/80 text-rose-200 text-xs rounded-full font-bold">
+                {importedSchoolsCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -1305,6 +1358,162 @@ export function SuperAdmin() {
         onClose={() => setIsBulkImportOpen(false)}
         onImportSchools={bulkAddSchools}
       />
+
+      {/* RESET BULK SCHOOLS MODAL */}
+      {isResetBulkModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in-50"
+          onClick={() => {
+            if (!isResetting) setIsResetBulkModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {language === 'mr' ? 'बल्क शाळा रिसेट / डेटाबेस क्लीनअप' : 'Reset Bulk Imported Schools'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {language === 'mr' ? 'अतिरिक्त किंवा चुकून जोडलेल्या शाळा काढून टाका' : 'Remove bulk uploaded schools safely'}
+                  </p>
+                </div>
+              </div>
+              {!isResetting && (
+                <button
+                  type="button"
+                  onClick={() => setIsResetBulkModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Modal Body */}
+            {importedSchoolsCount === 0 ? (
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <p className="text-sm font-bold text-slate-800">
+                  {language === 'mr' 
+                    ? 'सध्या कोणतीही अतिरिक्त किंवा बल्क आयात केलेली शाळा नाही!' 
+                    : 'No bulk imported schools to remove!'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {language === 'mr'
+                    ? 'तुमची सिस्टीम आधीपासूनच डीफॉल्ट मूळ स्थितीत स्वच्छ आहे.'
+                    : 'All schools are already at their default initial state.'}
+                </p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsResetBulkModalOpen(false)}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    {language === 'mr' ? 'ठीक आहे' : 'Close'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                    <span>
+                      {language === 'mr'
+                        ? `एकूण ${importedSchoolsCount} आयात केलेल्या शाळा हटवल्या जातील`
+                        : `Total ${importedSchoolsCount} imported schools will be removed`}
+                    </span>
+                  </div>
+                  <p className="text-xs text-rose-700 leading-relaxed">
+                    {language === 'mr'
+                      ? 'तुम्ही एक्सेलद्वारे किंवा बल्क इम्पोर्टद्वारे जोडलेल्या सर्व अतिरिक्त शाळा क्लाऊड डेटाबेस (Firestore), IndexedDB कॅशे आणि स्थानिक मेमरीमधून कायमच्या काढून टाकल्या जातील.'
+                      : 'All bulk-imported schools will be permanently deleted from Firestore cloud database, IndexedDB cache, and local memory.'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-1">
+                  <p className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>{language === 'mr' ? 'मूळ शाळा १००% सुरक्षित राहील:' : 'Default School is Safe:'}</span>
+                  </p>
+                  <p className="text-xs text-emerald-800 font-medium pl-5">
+                    {language === 'mr'
+                      ? 'श्री शिवाजी हायस्कूल आणि कनिष्ठ महाविद्यालय, चिखली (UDISE: 27040200119) ही मूळ शाळा सुरक्षित राहील, ती हटवली जाणार नाही.'
+                      : 'Shree Shivaji High School, Chikhli (UDISE: 27040200119) will remain completely intact.'}
+                  </p>
+                </div>
+
+                {/* Progress bar if actively deleting */}
+                {isResetting && (
+                  <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2 animate-in fade-in-50">
+                    <div className="flex items-center justify-between text-xs font-bold text-indigo-950">
+                      <span className="flex items-center gap-1.5">
+                        <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                        {language === 'mr' ? 'शाळा डेटाबेसमधून साफ करत आहे...' : 'Resetting schools from database...'}
+                      </span>
+                      <span>
+                        {resetProgress.done} / {resetProgress.total || importedSchoolsCount}
+                      </span>
+                    </div>
+                    <div className="w-full bg-indigo-100 rounded-full h-2.5 overflow-hidden">
+                      <div 
+                        className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                        style={{ 
+                          width: `${Math.min(100, Math.round((resetProgress.done / (resetProgress.total || importedSchoolsCount || 1)) * 100))}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isResetting}
+                    onClick={() => setIsResetBulkModalOpen(false)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer disabled:opacity-50"
+                  >
+                    {language === 'mr' ? 'रद्द करा (Cancel)' : 'Cancel'}
+                  </button>
+                  <button
+                    type="button"
+                    id="btn-confirm-reset-bulk-schools"
+                    disabled={isResetting}
+                    onClick={handleConfirmResetBulk}
+                    className="px-5 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isResetting ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{language === 'mr' ? 'रिसेट करत आहे...' : 'Resetting...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>
+                          {language === 'mr' 
+                            ? `होय, सर्व ${importedSchoolsCount} बल्क शाळा हटवा` 
+                            : `Yes, Delete All ${importedSchoolsCount} Bulk Schools`}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

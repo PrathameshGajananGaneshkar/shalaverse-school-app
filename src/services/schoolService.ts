@@ -2,7 +2,7 @@ import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, writeBatch, onSnap
 import { db } from '../firebase/config';
 import { School } from '../types';
 import { isFirestoreQuotaExceeded, recordQuotaExceeded, isQuotaExceededError } from '../utils/firestoreQuota';
-import { idbGetAllSchools, idbSaveAllSchools, idbPutSchool, idbDeleteSchool } from '../utils/indexedDb';
+import { idbGetAllSchools, idbSaveAllSchools, idbPutSchool, idbDeleteSchool, idbResetSchools } from '../utils/indexedDb';
 import { getActivePassword, setActivePassword, isMatchingActivePassword, cleanPasswordString } from '../utils/activePasswords';
 
 const COLLECTION_NAME = 'schools';
@@ -535,6 +535,85 @@ export const schoolService = {
     return {
       success: true,
       count: preparedSchools.length,
+      errors
+    };
+  },
+
+  /**
+   * Reset Bulk Imported Schools
+   * Removes all user-imported schools, restoring the system back to the initial default schools.
+   * - Deletes imported schools from Firestore in safe chunks of 300 docs
+   * - Clears and reseeds IndexedDB with DEFAULT_INITIAL_SCHOOLS
+   * - Cleans localStorage cache and status overrides
+   * - Resets memorySchoolsCache
+   * - Broadcasts 'shalaverse_schools_updated' event
+   */
+  async resetBulkImportedSchools(
+    onProgress?: (done: number, total: number) => void
+  ): Promise<{ success: boolean; deletedCount: number; errors: string[] }> {
+    const defaultIds = new Set(DEFAULT_INITIAL_SCHOOLS.map(s => s.id));
+    const errors: string[] = [];
+    let deletedCount = 0;
+
+    // 1. Fetch current schools to know how many to remove
+    const currentSchools = await this.getAllSchools();
+    const importedSchools = currentSchools.filter(s => !defaultIds.has(s.id));
+    const totalToDelete = importedSchools.length;
+
+    // 2. Batch delete from Firestore if reachable
+    try {
+      const colRef = collection(db, COLLECTION_NAME);
+      const snapshot = await getDocs(colRef);
+      const docsToDelete = snapshot.docs.filter(d => !defaultIds.has(d.id));
+      const totalDocs = docsToDelete.length;
+
+      const CHUNK_SIZE = 300;
+      for (let i = 0; i < totalDocs; i += CHUNK_SIZE) {
+        const chunk = docsToDelete.slice(i, i + CHUNK_SIZE);
+        const batch = writeBatch(db);
+        chunk.forEach(docSnap => {
+          batch.delete(docSnap.ref);
+        });
+        await batch.commit();
+        deletedCount += chunk.length;
+        if (onProgress) {
+          onProgress(deletedCount, Math.max(totalDocs, totalToDelete));
+        }
+      }
+    } catch (err: any) {
+      if (isQuotaExceededError(err)) recordQuotaExceeded();
+      console.warn('Firestore bulk delete notice:', err);
+      errors.push(err?.message || 'Firestore connection notice');
+    }
+
+    if (deletedCount === 0 && importedSchools.length > 0) {
+      deletedCount = importedSchools.length;
+    }
+
+    // 3. Clear & Reset IndexedDB with default initial schools
+    await idbResetSchools(DEFAULT_INITIAL_SCHOOLS);
+
+    // 4. Reset Memory Cache
+    memorySchoolsCache = [...DEFAULT_INITIAL_SCHOOLS];
+
+    // 5. Clean localStorage
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEFAULT_INITIAL_SCHOOLS));
+      localStorage.removeItem(STATUS_OVERRIDES_KEY);
+      localStorage.removeItem(DELETED_SCHOOLS_KEY);
+      localStorage.setItem(SEEDED_FLAG_KEY, 'true');
+    } catch {}
+
+    // 6. Broadcast updated schools to all active components & pages
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shalaverse_schools_updated', {
+        detail: DEFAULT_INITIAL_SCHOOLS
+      }));
+    }
+
+    return {
+      success: true,
+      deletedCount,
       errors
     };
   },

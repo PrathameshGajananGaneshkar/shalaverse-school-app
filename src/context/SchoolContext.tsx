@@ -18,6 +18,9 @@ interface SchoolContextType {
     schools: Partial<School>[],
     onProgress?: (done: number, total: number) => void
   ) => Promise<{ success: boolean; count: number; errors: string[] }>;
+  resetBulkSchools: (
+    onProgress?: (done: number, total: number) => void
+  ) => Promise<{ success: boolean; deletedCount: number; errors: string[] }>;
 }
 
 const SchoolContext = createContext<SchoolContextType | undefined>(undefined);
@@ -243,6 +246,21 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     return res;
   };
 
+  const resetBulkSchools = async (
+    onProgress?: (done: number, total: number) => void
+  ) => {
+    setLoading(true);
+    try {
+      const res = await schoolService.resetBulkImportedSchools(onProgress);
+      setAllSchools(DEFAULT_INITIAL_SCHOOLS);
+      setCurrentSchool(DEFAULT_INITIAL_SCHOOL);
+      localStorage.setItem(ACTIVE_SCHOOL_STORAGE_KEY, DEFAULT_INITIAL_SCHOOL.id);
+      return res;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SchoolContext.Provider
       value={{
@@ -256,7 +274,8 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         updateSchool,
         deleteSchool,
         toggleSchoolStatus,
-        bulkAddSchools
+        bulkAddSchools,
+        resetBulkSchools
       }}
     >
       {children}
