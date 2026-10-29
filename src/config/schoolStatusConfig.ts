@@ -13,7 +13,9 @@
  *   '27040200119': 'inactive',
  */
 export const CODE_SCHOOL_STATUS_CONFIG: Record<string, 'active' | 'inactive'> = {
-  // Add school IDs or UDISE numbers here to force inactive or active via code:
+  // Shivaji High School, Chikhli (UDISE: 27040200119)
+  'school_27040200119': 'inactive',
+  '27040200119': 'inactive',
 };
 
 /**
