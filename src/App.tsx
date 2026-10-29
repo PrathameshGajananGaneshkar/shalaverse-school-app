@@ -43,7 +43,7 @@ function ProtectedRoute() {
 
   // If school is inactive and user is on a school portal route (not super-admin portal)
   const codeStatus = currentSchool?.id ? (getCodeSchoolStatus(currentSchool.id) || getCodeSchoolStatus(currentSchool.udiseNumber)) : null;
-  const isInactive = codeStatus === 'inactive' || currentSchool?.status === 'inactive';
+  const isInactive = codeStatus ? codeStatus === 'inactive' : currentSchool?.status === 'inactive';
   const isSuperAdminPortal = location.pathname === '/super-admin';
 
   if (isInactive && !isSuperAdminPortal && !bypassPreview) {

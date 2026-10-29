@@ -130,23 +130,12 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
   }, [userProfile?.schoolId]);
 
   useEffect(() => {
-    // 0. Lightweight cloud status sync across all devices
-    schoolService.fetchCloudStatusOverrides().then((statuses) => {
-      if (statuses && Object.keys(statuses).length > 0) {
-        setAllSchools(prev => prev.map(s => {
-          const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
-          const cloudStatus = statuses[s.id];
-          const finalStatus = codeStatus || cloudStatus || s.status || 'active';
-          return { ...s, status: finalStatus };
-        }));
-        setCurrentSchool(prev => {
-          if (!prev) return prev;
-          const codeStatus = getCodeSchoolStatus(prev.id) || getCodeSchoolStatus(prev.udiseNumber);
-          const cloudStatus = statuses[prev.id];
-          const finalStatus = codeStatus || cloudStatus || prev.status || 'active';
-          return { ...prev, status: finalStatus };
-        });
-      }
+    // 0. Lightweight cloud status & deletion sync across all devices
+    Promise.all([
+      schoolService.fetchCloudStatusOverrides(),
+      schoolService.fetchCloudDeletedSchoolIds()
+    ]).then(([statuses, deletedIds]) => {
+      loadSchools();
     }).catch(() => {});
 
     loadSchools();
@@ -181,7 +170,33 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
       });
     });
 
-    // 3. Real-time Firebase cloud listener across all devices (Desktop, Mobile, etc.)
+    // 3. Real-time Master Document Listener (for immediate addition/deletion sync across devices)
+    const unsubMasterSync = schoolService.subscribeToMasterSync((deletedIds, customSchools) => {
+      // If schools were deleted on another device, purge them immediately
+      setAllSchools(prev => {
+        let updated = prev.filter(s => !deletedIds.includes(s.id));
+        if (customSchools && customSchools.length > 0) {
+          const map = new Map(updated.map(s => [s.id, s]));
+          customSchools.forEach(cs => {
+            if (!deletedIds.includes(cs.id)) {
+              map.set(cs.id, cs);
+            }
+          });
+          updated = Array.from(map.values());
+        }
+        return updated;
+      });
+
+      setCurrentSchool(prev => {
+        if (!prev) return prev;
+        if (deletedIds.includes(prev.id)) {
+          return DEFAULT_INITIAL_SCHOOLS[0] || DEFAULT_INITIAL_SCHOOL;
+        }
+        return prev;
+      });
+    });
+
+    // 4. Real-time Firebase cloud listener across all devices (Desktop, Mobile, etc.)
     const unsubscribe = schoolService.subscribeToSchools((freshSchools) => {
       setAllSchools(freshSchools);
       setCurrentSchool(prev => {
@@ -194,6 +209,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener('shalaverse_schools_updated', handleSchoolsUpdated);
       unsubCloudStatus();
+      unsubMasterSync();
       unsubscribe();
     };
   }, [loadSchools]);

@@ -9,6 +9,7 @@ import { getCodeSchoolStatus } from '../config/schoolStatusConfig';
 const COLLECTION_NAME = 'schools';
 const CLOUD_STATUS_COLLECTION = 'system_control';
 const CLOUD_STATUS_DOC = 'school_access_status';
+const MASTER_SYNC_DOC = 'schools_master_sync';
 const LOCAL_STORAGE_KEY = 'shalaverse_schools_cache';
 const DELETED_SCHOOLS_KEY = 'shalaverse_deleted_schools';
 const SEEDED_FLAG_KEY = 'shalaverse_schools_seeded';
@@ -16,6 +17,8 @@ const STATUS_OVERRIDES_KEY = 'shalaverse_school_status_overrides';
 
 // In-memory cache of cloud status overrides for instant multi-device sync
 let cachedCloudStatuses: Record<string, 'active' | 'inactive'> = {};
+// In-memory cache of cloud-deleted school IDs for cross-device sync
+let cachedCloudDeletedIds: string[] = [];
 
 export const DEFAULT_INITIAL_SCHOOL: School = {
   id: 'school_27040200119',
@@ -166,27 +169,117 @@ export const schoolService = {
   getDeletedSchoolIds(): string[] {
     try {
       const saved = localStorage.getItem(DELETED_SCHOOLS_KEY);
-      return saved ? JSON.parse(saved) : [];
+      const local = saved ? JSON.parse(saved) : [];
+      return Array.from(new Set([...cachedCloudDeletedIds, ...local]));
     } catch {
-      return [];
+      return cachedCloudDeletedIds;
     }
   },
 
   addDeletedSchoolId(id: string): void {
     try {
+      if (!cachedCloudDeletedIds.includes(id)) {
+        cachedCloudDeletedIds.push(id);
+      }
       const list = this.getDeletedSchoolIds();
       if (!list.includes(id)) {
         list.push(id);
-        localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(list));
       }
+      localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(list));
+      // Sync deletion to cloud master sync document
+      this.syncDeletedIdsToCloud(list).catch(() => {});
     } catch {}
   },
 
   removeDeletedSchoolId(id: string): void {
     try {
+      cachedCloudDeletedIds = cachedCloudDeletedIds.filter(i => i !== id);
       const list = this.getDeletedSchoolIds().filter(i => i !== id);
       localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(list));
+      this.syncDeletedIdsToCloud(list).catch(() => {});
     } catch {}
+  },
+
+  async syncDeletedIdsToCloud(deletedIds: string[]): Promise<void> {
+    try {
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, MASTER_SYNC_DOC);
+      await setDoc(docRef, {
+        deletedSchoolIds: deletedIds,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to sync deleted schools to cloud:', err);
+    }
+  },
+
+  /**
+   * Fetch cloud deleted schools list (consumes 1 read unit)
+   */
+  async fetchCloudDeletedSchoolIds(): Promise<string[]> {
+    try {
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, MASTER_SYNC_DOC);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (Array.isArray(data?.deletedSchoolIds)) {
+          cachedCloudDeletedIds = data.deletedSchoolIds;
+          const current = this.getDeletedSchoolIds();
+          const merged = Array.from(new Set([...current, ...data.deletedSchoolIds]));
+          localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(merged));
+          return merged;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch cloud deleted schools:', err);
+    }
+    return this.getDeletedSchoolIds();
+  },
+
+  /**
+   * Real-time subscription to cloud deleted schools and full school sync
+   * Any deletion or addition made on Desktop immediately syncs to Mobile in < 1 second!
+   */
+  subscribeToMasterSync(callback: (deletedIds: string[], customSchools?: School[]) => void): () => void {
+    try {
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, MASTER_SYNC_DOC);
+      const unsubscribe = onSnapshot(docRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          let changed = false;
+          if (Array.isArray(data?.deletedSchoolIds)) {
+            cachedCloudDeletedIds = data.deletedSchoolIds;
+            const current = this.getDeletedSchoolIds();
+            const merged = Array.from(new Set([...current, ...data.deletedSchoolIds]));
+            localStorage.setItem(DELETED_SCHOOLS_KEY, JSON.stringify(merged));
+            changed = true;
+          }
+          callback(cachedCloudDeletedIds, Array.isArray(data?.customSchools) ? data.customSchools : undefined);
+        }
+      }, (err) => {
+        console.warn('Master sync subscription notice:', err);
+      });
+      return unsubscribe;
+    } catch {
+      return () => {};
+    }
+  },
+
+  /**
+   * Sync complete custom/added schools list to Master Sync doc
+   * Ensures new schools and edits sync to Mobile even if main collection has quota limits
+   */
+  async syncCustomSchoolsToCloud(schools: School[]): Promise<void> {
+    try {
+      const defaultIds = new Set(DEFAULT_INITIAL_SCHOOLS.map(s => s.id));
+      const customOnly = schools.filter(s => !defaultIds.has(s.id));
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, MASTER_SYNC_DOC);
+      await setDoc(docRef, {
+        customSchools: customOnly.slice(0, 50), // sync up to 50 custom schools safely
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to sync custom schools to master cloud doc:', err);
+    }
   },
 
   getStatusOverrides(): Record<string, 'active' | 'inactive'> {
@@ -497,6 +590,9 @@ export const schoolService = {
       localStorage.setItem(SEEDED_FLAG_KEY, 'true');
     } catch {}
 
+    // Instantly sync to master cloud sync document for cross-device visibility
+    this.syncCustomSchoolsToCloud(updatedList).catch(() => {});
+
     // Save to Firestore in background/resiliently
     try {
       const docRef = doc(db, COLLECTION_NAME, schoolId);
@@ -757,6 +853,9 @@ export const schoolService = {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList.slice(0, 200)));
     } catch {}
 
+    // Sync to master cloud document
+    this.syncCustomSchoolsToCloud(updatedList).catch(() => {});
+
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
       await setDoc(docRef, updatedSchool, { merge: true });
@@ -784,6 +883,9 @@ export const schoolService = {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList.slice(0, 200)));
     } catch {}
+
+    // Instantly sync remaining custom schools to master doc
+    this.syncCustomSchoolsToCloud(updatedList).catch(() => {});
 
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
