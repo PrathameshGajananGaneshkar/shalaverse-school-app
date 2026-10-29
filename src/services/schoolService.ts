@@ -170,9 +170,11 @@ export const schoolService = {
     try {
       const saved = localStorage.getItem(DELETED_SCHOOLS_KEY);
       const local = saved ? JSON.parse(saved) : [];
-      return Array.from(new Set([...cachedCloudDeletedIds, ...local]));
+      // Shivaji High School (school_27040200119) is the primary base school and must never be blocked by residual deletion flags
+      const filtered = Array.from(new Set([...cachedCloudDeletedIds, ...local])).filter(id => id !== DEFAULT_INITIAL_SCHOOL.id);
+      return filtered;
     } catch {
-      return cachedCloudDeletedIds;
+      return cachedCloudDeletedIds.filter(id => id !== DEFAULT_INITIAL_SCHOOL.id);
     }
   },
 
