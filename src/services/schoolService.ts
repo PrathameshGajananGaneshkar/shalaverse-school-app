@@ -4,12 +4,18 @@ import { School } from '../types';
 import { isFirestoreQuotaExceeded, recordQuotaExceeded, isQuotaExceededError } from '../utils/firestoreQuota';
 import { idbGetAllSchools, idbSaveAllSchools, idbPutSchool, idbDeleteSchool, idbResetSchools } from '../utils/indexedDb';
 import { getActivePassword, setActivePassword, isMatchingActivePassword, cleanPasswordString } from '../utils/activePasswords';
+import { getCodeSchoolStatus } from '../config/schoolStatusConfig';
 
 const COLLECTION_NAME = 'schools';
+const CLOUD_STATUS_COLLECTION = 'system_control';
+const CLOUD_STATUS_DOC = 'school_access_status';
 const LOCAL_STORAGE_KEY = 'shalaverse_schools_cache';
 const DELETED_SCHOOLS_KEY = 'shalaverse_deleted_schools';
 const SEEDED_FLAG_KEY = 'shalaverse_schools_seeded';
 const STATUS_OVERRIDES_KEY = 'shalaverse_school_status_overrides';
+
+// In-memory cache of cloud status overrides for instant multi-device sync
+let cachedCloudStatuses: Record<string, 'active' | 'inactive'> = {};
 
 export const DEFAULT_INITIAL_SCHOOL: School = {
   id: 'school_27040200119',
@@ -186,18 +192,73 @@ export const schoolService = {
   getStatusOverrides(): Record<string, 'active' | 'inactive'> {
     try {
       const raw = localStorage.getItem(STATUS_OVERRIDES_KEY);
-      return raw ? JSON.parse(raw) : {};
+      const local = raw ? JSON.parse(raw) : {};
+      return { ...cachedCloudStatuses, ...local };
     } catch {
-      return {};
+      return cachedCloudStatuses;
     }
   },
 
   setStatusOverride(id: string, status: 'active' | 'inactive'): void {
     try {
+      cachedCloudStatuses[id] = status;
       const current = this.getStatusOverrides();
       current[id] = status;
       localStorage.setItem(STATUS_OVERRIDES_KEY, JSON.stringify(current));
     } catch {}
+  },
+
+  /**
+   * Fetch lightweight cloud status document from Firestore
+   * Consumes only 1 read unit (never exceeds quota).
+   */
+  async fetchCloudStatusOverrides(): Promise<Record<string, 'active' | 'inactive'>> {
+    try {
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, CLOUD_STATUS_DOC);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data?.statuses && typeof data.statuses === 'object') {
+          cachedCloudStatuses = { ...cachedCloudStatuses, ...data.statuses };
+          try {
+            const current = this.getStatusOverrides();
+            localStorage.setItem(STATUS_OVERRIDES_KEY, JSON.stringify({ ...current, ...data.statuses }));
+          } catch {}
+          return cachedCloudStatuses;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch cloud school status overrides:', err);
+    }
+    return cachedCloudStatuses;
+  },
+
+  /**
+   * Real-time subscription to cloud school status changes
+   * Works instantaneously across Desktop, Mobile, and all client browsers
+   */
+  subscribeToCloudStatus(callback: (statuses: Record<string, 'active' | 'inactive'>) => void): () => void {
+    try {
+      const docRef = doc(db, CLOUD_STATUS_COLLECTION, CLOUD_STATUS_DOC);
+      const unsubscribe = onSnapshot(docRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.statuses && typeof data.statuses === 'object') {
+            cachedCloudStatuses = { ...cachedCloudStatuses, ...data.statuses };
+            try {
+              const current = this.getStatusOverrides();
+              localStorage.setItem(STATUS_OVERRIDES_KEY, JSON.stringify({ ...current, ...data.statuses }));
+            } catch {}
+            callback(cachedCloudStatuses);
+          }
+        }
+      }, (err) => {
+        console.warn('Cloud status subscription notice:', err);
+      });
+      return unsubscribe;
+    } catch {
+      return () => {};
+    }
   },
 
   // Fetch all registered schools with Stale-While-Revalidate (0ms instant return + background sync)
@@ -220,7 +281,16 @@ export const schoolService = {
 
       return Array.from(mergedMap.values()).map(s => {
         const activePass = getActivePassword(s.id) || getActivePassword(s.udiseNumber) || getActivePassword(s.email);
-        const finalStatus = overrides[s.id] || s.status || 'active';
+        
+        // Priority 1: Direct code-level status from VS Code / Git
+        const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+        
+        // Priority 2: Cloud Firestore status override
+        const cloudStatus = cachedCloudStatuses[s.id] || overrides[s.id];
+
+        // Authoritative resolution: Code status > Cloud status > Record status > 'active'
+        const finalStatus = codeStatus || cloudStatus || s.status || 'active';
+
         return {
           ...s,
           status: finalStatus,
@@ -655,12 +725,27 @@ export const schoolService = {
 
     if (partial.status) {
       this.setStatusOverride(id, partial.status);
+      cachedCloudStatuses[id] = partial.status;
+
       const defItem = DEFAULT_INITIAL_SCHOOLS.find(s => s.id === id);
       if (defItem) {
         defItem.status = partial.status;
       }
       if (id === DEFAULT_INITIAL_SCHOOL.id) {
         DEFAULT_INITIAL_SCHOOL.status = partial.status;
+      }
+
+      // Sync to cloud dedicated status document for multi-device consistency
+      try {
+        const statusDocRef = doc(db, CLOUD_STATUS_COLLECTION, CLOUD_STATUS_DOC);
+        setDoc(statusDocRef, {
+          statuses: {
+            [id]: partial.status
+          },
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch((e) => console.warn('Cloud status setDoc note:', e));
+      } catch (err) {
+        console.warn('Failed to update cloud status in Firestore:', err);
       }
     }
 
@@ -711,6 +796,22 @@ export const schoolService = {
 
   // Toggle active/inactive subscription status
   async toggleSchoolStatus(id: string, status: 'active' | 'inactive'): Promise<School> {
+    this.setStatusOverride(id, status);
+    cachedCloudStatuses[id] = status;
+
+    // Immediately push to cloud status document (lightweight, guaranteed cross-device sync)
+    try {
+      const statusDocRef = doc(db, CLOUD_STATUS_COLLECTION, CLOUD_STATUS_DOC);
+      await setDoc(statusDocRef, {
+        statuses: {
+          [id]: status
+        },
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to write cloud status:', err);
+    }
+
     return this.updateSchool(id, { status });
   },
 
@@ -735,7 +836,12 @@ export const schoolService = {
 
     // 1. Fast path: check against local active password or cached school object
     if (match) {
-      if (match.status === 'inactive') {
+      // Definitive status authority: Code-level (VS Code) > Cloud status > Record status
+      const codeStatus = getCodeSchoolStatus(match.id) || getCodeSchoolStatus(match.udiseNumber);
+      const cloudStatus = cachedCloudStatuses[match.id] || this.getStatusOverrides()[match.id];
+      const definitiveStatus = codeStatus || cloudStatus || match.status || 'active';
+
+      if (definitiveStatus === 'inactive') {
         return {
           success: false,
           error: 'या शाळेचे खाते सध्या तात्पुरते बंद / निलंबित (Inactive) आहे. कृपया सुपर ॲडमिनशी संपर्क साधा.'

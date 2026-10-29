@@ -21,6 +21,7 @@ import { useLocation } from 'react-router-dom';
 import { Lock } from 'lucide-react';
 import { useSchool } from './context/SchoolContext';
 import { SuspendedSchoolScreen } from './components/common/SuspendedSchoolScreen';
+import { getCodeSchoolStatus } from './config/schoolStatusConfig';
 
 function ProtectedRoute() {
   const { isAuthenticated, loading, logout } = useAuth();
@@ -41,7 +42,8 @@ function ProtectedRoute() {
   }
 
   // If school is inactive and user is on a school portal route (not super-admin portal)
-  const isInactive = currentSchool?.status === 'inactive';
+  const codeStatus = currentSchool?.id ? (getCodeSchoolStatus(currentSchool.id) || getCodeSchoolStatus(currentSchool.udiseNumber)) : null;
+  const isInactive = codeStatus === 'inactive' || currentSchool?.status === 'inactive';
   const isSuperAdminPortal = location.pathname === '/super-admin';
 
   if (isInactive && !isSuperAdminPortal && !bypassPreview) {

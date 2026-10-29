@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { School } from '../types';
 import { schoolService, DEFAULT_INITIAL_SCHOOL, DEFAULT_INITIAL_SCHOOLS } from '../services/schoolService';
 import { useAuth } from './AuthContext';
+import { getCodeSchoolStatus } from '../config/schoolStatusConfig';
 
 interface SchoolContextType {
   allSchools: School[];
@@ -44,31 +45,43 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
             list.forEach((s: School) => {
               if (!deletedIds.includes(s.id)) mergedMap.set(s.id, s);
             });
-            return Array.from(mergedMap.values());
+            const overrides = schoolService.getStatusOverrides();
+            return Array.from(mergedMap.values()).map(s => {
+              const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+              const cloudStatus = overrides[s.id];
+              return { ...s, status: codeStatus || cloudStatus || s.status || 'active' };
+            });
           }
         }
       } catch {}
     }
-    return DEFAULT_INITIAL_SCHOOLS;
+    return DEFAULT_INITIAL_SCHOOLS.map(s => {
+      const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+      return { ...s, status: codeStatus || s.status || 'active' };
+    });
   });
 
   const [currentSchool, setCurrentSchool] = useState<School | null>(() => {
+    let initial: School = DEFAULT_INITIAL_SCHOOLS[0] || DEFAULT_INITIAL_SCHOOL;
     if (typeof window !== 'undefined') {
       const savedSchoolId = localStorage.getItem(ACTIVE_SCHOOL_STORAGE_KEY);
       if (savedSchoolId) {
         const match = DEFAULT_INITIAL_SCHOOLS.find(s => s.id === savedSchoolId);
-        if (match) return match;
+        if (match) initial = match;
         const cached = localStorage.getItem('shalaverse_schools_cache');
         if (cached) {
           try {
             const list = JSON.parse(cached);
             const found = list.find((s: School) => s.id === savedSchoolId);
-            if (found) return found;
+            if (found) initial = found;
           } catch {}
         }
       }
     }
-    return DEFAULT_INITIAL_SCHOOLS[0] || DEFAULT_INITIAL_SCHOOL;
+    const codeStatus = getCodeSchoolStatus(initial.id) || getCodeSchoolStatus(initial.udiseNumber);
+    const overrides = schoolService.getStatusOverrides();
+    const finalStatus = codeStatus || overrides[initial.id] || initial.status || 'active';
+    return { ...initial, status: finalStatus };
   });
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -117,6 +130,25 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
   }, [userProfile?.schoolId]);
 
   useEffect(() => {
+    // 0. Lightweight cloud status sync across all devices
+    schoolService.fetchCloudStatusOverrides().then((statuses) => {
+      if (statuses && Object.keys(statuses).length > 0) {
+        setAllSchools(prev => prev.map(s => {
+          const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+          const cloudStatus = statuses[s.id];
+          const finalStatus = codeStatus || cloudStatus || s.status || 'active';
+          return { ...s, status: finalStatus };
+        }));
+        setCurrentSchool(prev => {
+          if (!prev) return prev;
+          const codeStatus = getCodeSchoolStatus(prev.id) || getCodeSchoolStatus(prev.udiseNumber);
+          const cloudStatus = statuses[prev.id];
+          const finalStatus = codeStatus || cloudStatus || prev.status || 'active';
+          return { ...prev, status: finalStatus };
+        });
+      }
+    }).catch(() => {});
+
     loadSchools();
 
     // 1. Listen for background sync updates on this device
@@ -132,7 +164,24 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
     };
     window.addEventListener('shalaverse_schools_updated', handleSchoolsUpdated);
 
-    // 2. Real-time Firebase cloud listener across all devices (Desktop, Mobile, etc.)
+    // 2. Real-time Firebase cloud listener on dedicated status document (guaranteed multi-device sync)
+    const unsubCloudStatus = schoolService.subscribeToCloudStatus((freshStatuses) => {
+      setAllSchools(prev => prev.map(s => {
+        const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+        const cloudStatus = freshStatuses[s.id];
+        const finalStatus = codeStatus || cloudStatus || s.status || 'active';
+        return { ...s, status: finalStatus };
+      }));
+      setCurrentSchool(prev => {
+        if (!prev) return prev;
+        const codeStatus = getCodeSchoolStatus(prev.id) || getCodeSchoolStatus(prev.udiseNumber);
+        const cloudStatus = freshStatuses[prev.id];
+        const finalStatus = codeStatus || cloudStatus || prev.status || 'active';
+        return { ...prev, status: finalStatus };
+      });
+    });
+
+    // 3. Real-time Firebase cloud listener across all devices (Desktop, Mobile, etc.)
     const unsubscribe = schoolService.subscribeToSchools((freshSchools) => {
       setAllSchools(freshSchools);
       setCurrentSchool(prev => {
@@ -144,6 +193,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
 
     return () => {
       window.removeEventListener('shalaverse_schools_updated', handleSchoolsUpdated);
+      unsubCloudStatus();
       unsubscribe();
     };
   }, [loadSchools]);
