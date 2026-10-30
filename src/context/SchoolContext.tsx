@@ -172,7 +172,7 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
 
     // 3. Real-time Master Document Listener (for immediate addition/deletion sync across devices)
     const unsubMasterSync = schoolService.subscribeToMasterSync((deletedIds, customSchools) => {
-      // If schools were deleted on another device, purge them immediately
+      // If schools were deleted or added on another device, update immediately
       setAllSchools(prev => {
         let updated = prev.filter(s => !deletedIds.includes(s.id));
         if (customSchools && customSchools.length > 0) {
@@ -184,7 +184,13 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
           });
           updated = Array.from(map.values());
         }
-        return updated;
+        const overrides = schoolService.getStatusOverrides();
+        return updated.map(s => {
+          const codeStatus = getCodeSchoolStatus(s.id) || getCodeSchoolStatus(s.udiseNumber);
+          const cloudStatus = overrides[s.id];
+          const finalStatus = codeStatus || cloudStatus || s.status || 'active';
+          return { ...s, status: finalStatus };
+        });
       });
 
       setCurrentSchool(prev => {
@@ -192,7 +198,11 @@ export function SchoolProvider({ children }: { children: ReactNode }) {
         if (deletedIds.includes(prev.id)) {
           return DEFAULT_INITIAL_SCHOOLS[0] || DEFAULT_INITIAL_SCHOOL;
         }
-        return prev;
+        const overrides = schoolService.getStatusOverrides();
+        const codeStatus = getCodeSchoolStatus(prev.id) || getCodeSchoolStatus(prev.udiseNumber);
+        const cloudStatus = overrides[prev.id];
+        const finalStatus = codeStatus || cloudStatus || prev.status || 'active';
+        return { ...prev, status: finalStatus };
       });
     });
 

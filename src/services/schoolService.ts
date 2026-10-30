@@ -878,23 +878,37 @@ export const schoolService = {
       memorySchoolsCache = memorySchoolsCache.filter(s => s.id !== id);
     }
 
-    await idbDeleteSchool(id);
+    try {
+      await idbDeleteSchool(id);
+    } catch (e) {
+      console.warn('idbDeleteSchool note:', e);
+    }
 
     const existing = await this.getAllSchools();
     const updatedList = existing.filter(s => s.id !== id);
+    memorySchoolsCache = updatedList;
+
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList.slice(0, 200)));
     } catch {}
 
+    // Dispatch real-time local event so UI cleans up instantly (< 1ms)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('shalaverse_schools_updated', { detail: updatedList }));
+    }
+
     // Instantly sync remaining custom schools to master doc
     this.syncCustomSchoolsToCloud(updatedList).catch(() => {});
 
+    // Delete from Firestore with 2.5s timeout so network latency or quota pauses NEVER freeze the UI
     try {
       const docRef = doc(db, COLLECTION_NAME, id);
-      await deleteDoc(docRef);
+      const deletePromise = deleteDoc(docRef);
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
+      await Promise.race([deletePromise, timeoutPromise]);
     } catch (err) {
       if (isQuotaExceededError(err)) recordQuotaExceeded();
-      console.warn('Failed to delete school from Firestore:', err);
+      console.warn('Failed to delete school from Firestore, removed locally:', err);
     }
   },
 

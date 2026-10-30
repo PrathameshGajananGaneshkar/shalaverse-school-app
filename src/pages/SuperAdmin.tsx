@@ -328,14 +328,15 @@ export function SuperAdmin() {
 
   const handleConfirmDelete = async () => {
     if (!schoolToDelete) return;
+    const target = schoolToDelete;
     setIsDeleting(true);
+    setSchoolToDelete(null); // Close modal immediately to avoid UI hang
     try {
       const schoolTitle = language === 'mr' 
-        ? (schoolToDelete.schoolNameLocal || schoolToDelete.schoolName) 
-        : (schoolToDelete.schoolName || schoolToDelete.schoolNameLocal);
-      await deleteSchool(schoolToDelete.id);
+        ? (target.schoolNameLocal || target.schoolName) 
+        : (target.schoolName || target.schoolNameLocal);
+      await deleteSchool(target.id);
       setNotification(language === 'mr' ? `शाळा "${schoolTitle}" यशस्वीरित्या हटवली गेली.` : `School "${schoolTitle}" deleted successfully.`);
-      setSchoolToDelete(null);
       setTimeout(() => setNotification(null), 3500);
     } catch (err: any) {
       console.error('Delete school error:', err);
